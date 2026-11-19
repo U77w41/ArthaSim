@@ -1,0 +1,14 @@
+banks: 3
+builder: spike
+districts: []
+employers: 100
+localities_per_district: 20
+merchants: 300
+nbfcs: 0
+out_dir: runs
+param_overrides: {}
+params_path: params/registry.yaml
+persons: 10000
+slots_per_day: 96
+start: '2025-04-01'
+tier_name: XS

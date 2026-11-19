@@ -1,0 +1,16 @@
+banks: 12
+builder: population
+districts:
+- metro_archetype
+- rural_archetype
+employers: null
+localities_per_district: 20
+merchants: null
+nbfcs: 2
+out_dir: runs
+param_overrides: {}
+params_path: params/registry.yaml
+persons: 100000
+slots_per_day: 96
+start: '2025-04-01'
+tier_name: S

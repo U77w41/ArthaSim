@@ -1,0 +1,402 @@
+# Parameter registry. status: verified | unverified | assumption. role: input | target | holdout.
+- id: spike.salaried_share
+  value: 0.6
+  unit: share
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.salary.median_paise
+  value: 2500000
+  unit: paise per month
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.salary.sigma
+  value: 0.6
+  unit: log sd
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.purchases_per_day
+  value: 1.2
+  unit: per person per day
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.purchase.median_paise
+  value: 20000
+  unit: paise
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.purchase.sigma
+  value: 0.9
+  unit: log sd
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.digital_share
+  value: 0.6
+  unit: share
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.cash_withdrawal_paise
+  value: 200000
+  unit: paise
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.opening_balance.median_paise
+  value: 1000000
+  unit: paise
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.opening_balance.sigma
+  value: 1.0
+  unit: log sd
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.opening_cash_paise
+  value: 100000
+  unit: paise
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.employer_revenue_multiple
+  value: 1.3
+  unit: multiple of payroll
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.bank_shares
+  value:
+  - 0.5
+  - 0.3
+  - 0.2
+  unit: share
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.bank_equity_paise
+  value: 1000000000
+  unit: paise
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: spike.vault_cash_per_customer_paise
+  value: 5000000
+  unit: paise
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: rail.upi.limit_paise
+  value: 10000000
+  unit: paise
+  as_of: 2026-11
+  source: v1 blueprint, carried over; primary source to be pinned
+  status: unverified
+  role: input
+- id: rail.upi.tech_decline_rate
+  value: 0.01
+  unit: share
+  as_of: 2026-11
+  source: phase 0 spike placeholder
+  status: assumption
+  role: input
+- id: attr.digital.base_by_education
+  value: [0.15, 0.3, 0.5, 0.75, 0.85]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: attr.digital.metro_bonus, value: 0.1, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: attr.digital.age_penalty, value: 0.4, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: attr.digital.upi_threshold, value: 0.45, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- id: attr.financial.base_by_education
+  value: [0.1, 0.2, 0.4, 0.65, 0.8]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: attr.skill.base, value: 0.2, unit: '', as_of: 2026-11, source: plan 1a placeholder,
+  status: assumption, role: input}
+- {id: attr.skill.per_education_level, value: 0.12, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: attr.skill.per_year_experience, value: 0.004, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: attr.noise_sd, value: 0.1, unit: '', as_of: 2026-11, source: plan 1a placeholder,
+  status: assumption, role: input}
+- id: attr.trait_shapes
+  value:
+    risk_appetite: [2, 3]
+    habit_strength: [3, 2]
+    price_sensitivity: [2, 2]
+    trust_in_offers: [2, 3]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: earn.base_paise, value: 1200000, unit: '', as_of: 2026-11, source: plan 1a
+    placeholder, status: assumption, role: input}
+- id: earn.return_by_education
+  value: [0.0, 0.15, 0.45, 0.95, 1.3]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: earn.experience.linear, value: 0.035, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: earn.experience.quadratic, value: 0.0006, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: earn.premium.metro, value: 0.25, unit: '', as_of: 2026-11, source: plan 1a
+    placeholder, status: assumption, role: input}
+- id: earn.premium.by_sector
+  value: [-0.2, 0.05, 0.0, 0.0, 0.0, 0.45, 0.4, 0.25, 0.1, -0.05]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: earn.sigma, value: 0.45, unit: '', as_of: 2026-11, source: plan 1a placeholder,
+  status: assumption, role: input}
+- id: earn.stage_multiplier
+  value: {salaried: 1.0, self_employed: 0.9, gig: 0.6, farm: 0.5, casual: 0.4}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: earn.pension_ratio, value: 0.35, unit: '', as_of: 2026-11, source: plan 1a
+    placeholder, status: assumption, role: input}
+- id: earn.start_age_by_education
+  value: [18, 18, 18, 22, 24]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: org.sector_shares.metro
+  value: [0.01, 0.14, 0.08, 0.18, 0.08, 0.14, 0.07, 0.08, 0.1, 0.12]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: org.sector_shares.rural
+  value: [0.3, 0.1, 0.14, 0.14, 0.07, 0.01, 0.02, 0.07, 0.08, 0.07]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: org.employer_size_classes
+  value:
+  - [1, 9, 0.7]
+  - [10, 49, 0.22]
+  - [50, 249, 0.07]
+  - [250, 2000, 0.01]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: org.persons_per_merchant, value: 40, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- id: org.merchant_category_shares
+  value: [0.3, 0.15, 0.04, 0.06, 0.08, 0.04, 0.08, 0.15, 0.1]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: org.merchant_upi_acceptance
+  value: {metro: 0.8, rural: 0.45}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: org.merchant_card_acceptance
+  value: {metro: 0.25, rural: 0.05}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: bank.archetypes
+  value:
+  - [public, 0.2, 0.28]
+  - [public, 0.12, 0.18]
+  - [public, 0.08, 0.12]
+  - [public, 0.05, 0.08]
+  - [private, 0.18, 0.06]
+  - [private, 0.12, 0.04]
+  - [private, 0.08, 0.03]
+  - [private, 0.05, 0.02]
+  - [small_finance, 0.03, 0.05]
+  - [small_finance, 0.02, 0.04]
+  - [payments, 0.04, 0.06]
+  - [cooperative, 0.03, 0.04]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: inclusion.account_ownership
+  value: {metro: 0.9, rural: 0.8}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- id: inclusion.second_account_share
+  value: {metro: 0.25, rural: 0.1}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: inclusion.salary_account_at_employer_bank, value: 0.6, unit: '', as_of: 2026-11,
+  source: plan 1a placeholder, status: assumption, role: input}
+- {id: inclusion.basic_account_income_paise, value: 1000000, unit: '', as_of: 2026-11,
+  source: plan 1a placeholder, status: assumption, role: input}
+- {id: inclusion.debit_card_share, value: 0.7, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: inclusion.mobile_share, value: 0.9, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- id: identity.pan_share
+  value: {salaried: 0.95, other_earning: 0.45, non_earning: 0.3}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: open.deposit_months_of_income, value: 0.8, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: open.deposit_floor_paise, value: 200000, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: open.deposit_sigma, value: 1.0, unit: '', as_of: 2026-11, source: plan 1a placeholder,
+  status: assumption, role: input}
+- {id: open.cash_median_paise, value: 150000, unit: '', as_of: 2026-11, source: plan
+    1a placeholder, status: assumption, role: input}
+- {id: open.cash_sigma, value: 0.6, unit: '', as_of: 2026-11, source: plan 1a placeholder,
+  status: assumption, role: input}
+- {id: graph.coworker_degree, value: 5, unit: '', as_of: 2026-11, source: plan 1a
+    placeholder, status: assumption, role: input}
+- {id: graph.neighbour_degree, value: 4, unit: '', as_of: 2026-11, source: plan 1a
+    placeholder, status: assumption, role: input}
+- {id: graph.migrant_share, value: 0.15, unit: '', as_of: 2026-11, source: plan 1a
+    placeholder, status: assumption, role: input}
+- id: hh.dependant_ages
+  value: [20, 49]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1a placeholder
+  status: assumption
+  role: input
+- {id: flows.boundary_cash_months, value: 36, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- id: income.pay_events_per_month
+  value: {self_employed: 26, gig: 4, farm: 1, casual: 22}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1b-1 placeholder
+  status: assumption
+  role: input
+- id: income.cash_share
+  value: {self_employed: 0.5, gig: 0.1, farm: 0.6, casual: 0.9}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1b-1 placeholder
+  status: assumption
+  role: input
+- {id: income.event_sigma, value: 0.3, unit: '', as_of: 2026-11, source: plan 1b-1
+    placeholder, status: assumption, role: input}
+- {id: income.pension_day, value: 1, unit: '', as_of: 2026-11, source: plan 1b-1 placeholder,
+  status: assumption, role: input}
+- {id: transfer.remittance_share, value: 0.2, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.buffer_target_months, value: 3.0, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.spend_share, value: 0.85, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.floor_per_adult_paise, value: 250000, unit: '', as_of: 2026-11,
+  source: plan 1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.dependant_weight, value: 0.5, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.adjust_min, value: 0.6, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.adjust_max, value: 1.15, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- id: consumption.category_shares.metro
+  value: [0.28, 0.12, 0.06, 0.05, 0.07, 0.04, 0.09, 0.1, 0.08, 0.07, 0.04]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1b-1 placeholder
+  status: assumption
+  role: input
+- id: consumption.category_shares.rural
+  value: [0.38, 0.08, 0.06, 0.06, 0.07, 0.03, 0.08, 0.07, 0.08, 0.05, 0.04]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1b-1 placeholder
+  status: assumption
+  role: input
+- id: consumption.purchases_per_month
+  value: [12, 8, 3, 1.5, 0.7, 0.15, 10, 2, 3]
+  unit: ''
+  as_of: 2026-11
+  source: plan 1b-1 placeholder
+  status: assumption
+  role: input
+- {id: consumption.ticket_sigma, value: 0.6, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.local_share, value: 0.7, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: consumption.online_share, value: 0.25, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: rail.choice.upi_preference, value: 0.85, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: rail.choice.card_preference, value: 0.5, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: shock.medical_monthly_prob, value: 0.01, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: shock.medical_median_paise, value: 800000, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: shock.medical_sigma, value: 1.0, unit: '', as_of: 2026-11, source: plan 1b-1
+    placeholder, status: assumption, role: input}
+- {id: shock.stress_bonus, value: 0.3, unit: '', as_of: 2026-11, source: plan 1b-1
+    placeholder, status: assumption, role: input}
+- {id: cash.merchant_float_paise, value: 500000, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: cash.person_deposit_threshold_paise, value: 2000000, unit: '', as_of: 2026-11,
+  source: plan 1b-1 placeholder, status: assumption, role: input}
+- {id: cash.person_keep_paise, value: 500000, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}
+- {id: cash.person_deposit_daily_prob, value: 0.2, unit: '', as_of: 2026-11, source: plan
+    1b-1 placeholder, status: assumption, role: input}

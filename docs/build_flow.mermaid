@@ -1,0 +1,71 @@
+flowchart TD
+    A["Blueprint v2 approved"] --> B["Settle open decisions:<br/>districts, time window, bank data,<br/>release level, phase order, name"]
+    B --> C["Write task-by-task plan<br/>for phases 0 and 1"]
+    C -.->|every step below follows| T1
+    C --> P0a
+
+    subgraph LOOP["How each step is built"]
+        T1["Write a failing test"] --> T2["Implement"]
+        T2 --> T3{"Tests and ledger<br/>invariants pass?"}
+        T3 -->|No| T2
+        T3 -->|Yes| T4["Commit"]
+    end
+
+    subgraph P0["Phase 0: spike at tier XS, 10,000 persons"]
+        P0a["Project skeleton, config,<br/>parameter registry"] --> P0b["Keyed random numbers"]
+        P0b --> P0c["Ledger: instruments, journal,<br/>postings, invariants"]
+        P0c --> P0d["Daily loop with<br/>96 settlement slots"]
+        P0d --> P0e["Minimal world: salaries,<br/>consumption, UPI, cash"]
+        P0e --> P0f["Parquet output and run manifest"]
+    end
+    P0f --> G0{"90 days pass all invariants?<br/>Same seed gives same output?<br/>Throughput measured?"}
+    G0 -->|No, fix| P0c
+    G0 -->|Yes| P1a
+
+    subgraph P1["Phase 1: base world at tier S, 100,000 persons"]
+        P1a["Synthetic population, households,<br/>social graph"] --> P1b["Employers, merchants, banks,<br/>accounts, payment rails"]
+        P1b --> P1c["Life course with alignment,<br/>income, shocks"]
+        P1c --> P1d["Consumption, rail choice,<br/>deposits"]
+        P1d --> P1e["Views: bank, bureau, AA, switch, truth.<br/>Single-entity inspector"]
+        P1e --> P1f["Scenarios, interventions,<br/>paired experiments"]
+        P1f --> P1g["Calibrate to targets,<br/>run acceptance checks"]
+    end
+    P1g --> G1{"Acceptance checks pass?<br/>Experiment returns an effect<br/>with an interval?"}
+    G1 -->|No, recalibrate| P1g
+    G1 -->|Yes| P2a
+
+    subgraph P2["Phase 2: fraud"]
+        P2a["Victim model and complaints"] --> P2b["Rings, mule recruitment,<br/>typology scripts"]
+        P2b --> P2c["Illicit-fund tagging,<br/>truth and observed labels"]
+        P2c --> P2d["Bank controls, fraud-control hook,<br/>ring adaptation"]
+        P2d --> P2e["Fraud datasets"]
+        P2e --> P2f["Transfer test on<br/>real bank data"]
+    end
+    P2f --> G2{"Fraud targets met?<br/>Detector tested in the loop?<br/>Transfer test written up?"}
+    G2 -->|No, revise behaviour| P2b
+    G2 -->|Yes| P3a
+
+    subgraph P3["Phase 3: credit and cards"]
+        P3a["Loan products, origination,<br/>credit-policy hook"] --> P3b["EMI collection, bounces,<br/>SMA and NPA ladder"]
+        P3b --> P3c["Collections, write-off, recovery"]
+        P3c --> P3d["Bureau reporting and score"]
+        P3d --> P3e["Cards: statements, revolving,<br/>card-policy hook"]
+        P3e --> P3f["Loan and card datasets"]
+    end
+    P3f --> G3{"Roll-rate targets met?<br/>Policies testable in the loop?"}
+    G3 -->|No, recalibrate| P3b
+    G3 -->|Yes| P4a
+
+    subgraph P4["Phase 4: investments and recommendation"]
+        P4a["Deposits, SIPs, gold, insurance,<br/>market path"] --> P4b["Adoption, step-up, stop,<br/>distress redemption"]
+        P4b --> P4c["Catalogue, offers, response model,<br/>recommender hook"]
+        P4c --> P4d["Investment and recommendation<br/>datasets"]
+    end
+    P4d --> G4{"Adoption targets met?<br/>Uplift experiment runs<br/>end to end?"}
+    G4 -->|No, recalibrate| P4b
+    G4 -->|Yes| P5a
+
+    subgraph P5["Phase 5: scale and breadth"]
+        P5a["Tier M benchmark run,<br/>1,000,000 persons"] --> P5b["MSME, GST, self-help groups,<br/>farm credit"]
+        P5b --> P5c["Tier L design"]
+    end

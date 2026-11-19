@@ -1,0 +1,17 @@
+# Archetype district. Every share here is a placeholder, not a measurement.
+# Lists follow the category order in src/arthasim/build/categories.py.
+id: rural_archetype
+name: Rural archetype
+kind: rural
+state_code: null
+district_code: null
+status: assumption
+adult_population: 2000000
+age_band: [0.18, 0.24, 0.20, 0.23, 0.15]
+sex: [0.50, 0.50]
+education: [0.30, 0.25, 0.30, 0.12, 0.03]
+life_stage:
+  - [0.04, 0.02, 0.05, 0.10, 0.01, 0.22, 0.12, 0.36, 0.08]   # F
+  - [0.06, 0.04, 0.14, 0.18, 0.03, 0.30, 0.17, 0.00, 0.08]   # M
+household_adults: [0.08, 0.42, 0.25, 0.15, 0.10]
+dependants_mean: 1.4
