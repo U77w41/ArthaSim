@@ -16,6 +16,8 @@ def test_population_world_runs_on_the_new_modules(tmp_path):
     pay = run.table("payments").collect()
     purposes, rails = set(pay["purpose"].unique()), set(pay["rail"].unique())
     assert run.manifest["days"] == 50 and "UNSPECIFIED" not in purposes
+    wd = pay.filter(pl.col("purpose") == "CASH_WITHDRAWAL")["amount_paise"]
+    assert (wd % P.get("cash.withdrawal_note_paise") == 0).all() and (wd != P.get("spike.cash_withdrawal_paise")).any()
     assert {"SALARY", "EARNINGS", "PENSION", "EMPLOYER_REVENUE", "REMITTANCE", "GROCERY", "TRANSPORT",
             "UTILITIES", "TELECOM", "CASH_WITHDRAWAL", "CASH_DEPOSIT"} <= purposes
     assert {"UPI_P2M", "UPI_P2P", "DEBIT_CARD", "CASH", "NACH_CR", "NEFT", "ATM", "AEPS", "BRANCH"} <= rails

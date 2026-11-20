@@ -181,7 +181,7 @@ def test_household_scale():
 def test_nobody_gives_and_receives():
     # Income 105 against need 100: a payer of a little, never a recipient of the margin.
     p, r, a = allowance_pairs(np.array([0, 0, 0]), np.array([1_000, 105, 0]), np.array([100.0, 100.0, 100.0]), 0.15)
-    assert set(r.tolist()) == {2} and a.sum() == 115 and 1 in p.tolist()
+    assert list(zip(p.tolist(), r.tolist(), a.tolist())) == [(0, 2, 114), (1, 2, 1)]
 
 
 def test_allowance_need_is_unpadded():
@@ -227,6 +227,9 @@ def test_margin_never_lowers_an_allowance(people, margin):
     p, r, a = allowance_pairs(hh, income, need, margin)
     padded = dict(zip(zip(p.tolist(), r.tolist()), a.tolist()))
     assert all(padded.get(pair, 0) >= amount for pair, amount in plain.items())
+    surplus = np.maximum(0.0, income - need)
+    for q in np.unique(p):                                        # nobody gives more than their surplus
+        assert a[p == q].sum() <= surplus[q] + 0.5 * (p == q).sum()
 
 
 def test_cash_allowance_withdrawals_use_the_registry_note(tmp_path):
@@ -238,3 +241,25 @@ def test_cash_allowance_withdrawals_use_the_registry_note(tmp_path):
     it = Intents.concat([mod.intents(world, dt.date(2025, 4, d)) for d in range(1, 31)])
     wd = it.kind == Kind.CASH_WITHDRAWAL
     assert wd.any() and (it.amount[wd] % 50_000 == 0).all()
+
+
+def test_allowance_over_the_upi_limit_goes_by_imps():
+    upi, banked = B.banking.person_upi, S.person_deposit >= 0
+    payer, rec = np.flatnonzero(upi & banked)[:2]
+    mod = Allowance()
+    mod._pairs = (np.array([payer]), np.array([rec]), np.array([P.get("rail.upi.limit_paise") + 1]), np.array([5]))
+    it = mod.intents(W, dt.date(2025, 4, 5))
+    assert it.rail.tolist() == [Rail.IMPS] and it.kind.tolist() == [Kind.PAYMENT]
+
+
+def test_withdrawal_settles_before_the_allowance_it_funds():
+    _, _ = _month(2025, 4)                                         # sets the April budget
+    mod = Allowance()
+    mod.monthly(W, dt.date(2025, 4, 1))
+    owner = _owner()
+    for d in range(1, 31):
+        it = mod.intents(W, dt.date(2025, 4, d)).sorted()
+        payer = owner[it.payer_acct]
+        for i in np.flatnonzero(it.kind == Kind.CASH_WITHDRAWAL):
+            gifts = np.flatnonzero((payer == payer[i]) & (it.kind == Kind.CASH_PAYMENT))
+            assert gifts.size and (gifts > i).all()

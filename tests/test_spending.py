@@ -127,19 +127,6 @@ def test_card_only_when_deposit_covers_amount(tmp_path):
     it = Consumption().intents(world, day)
     card = it.rail == Rail.DEBIT_CARD
     assert card.any() and (s.book.balance[it.payer_acct[card]] >= it.amount[card]).all()
-    # Some card holders at card-accepting merchants paid cash because their balance was short.
-    cash_payer = np.flatnonzero(it.rail == Rail.CASH)
-    holder = np.full(len(s.book), -1, dtype=np.int64)
-    holder[s.person_cash] = np.arange(len(s.person_cash))
-    person = holder[it.payer_acct[cash_payer]]
-    merchant_of = np.full(len(s.book), -1, dtype=np.int64)
-    merchant_of[s.merchant_cash] = np.arange(len(s.merchant_cash))
-    merchant = merchant_of[it.payee_acct[cash_payer]]
-    at_shop = merchant >= 0
-    person, merchant, amount = person[at_shop], merchant[at_shop], it.amount[cash_payer][at_shop]
-    short = (k.person_has_card[person] & o.merchant_accepts_card[merchant] & (s.person_deposit[person] >= 0)
-             & (s.book.balance[np.maximum(s.person_deposit[person], 0)] < amount))
-    assert short.any()
 
 
 def test_upi_only_when_deposit_covers_amount(tmp_path):
@@ -167,3 +154,42 @@ def test_upi_only_when_deposit_covers_amount(tmp_path):
     it = Consumption().intents(world, day)
     digital = np.isin(it.rail, [Rail.UPI_P2M, Rail.DEBIT_CARD])
     assert digital.any() and (s.book.balance[it.payer_acct[digital]] >= it.amount[digital]).all()
+
+
+def test_funding_changes_only_unfunded_rails(tmp_path):
+    """Same purchases with every account funded and with random balances: only unfunded UPI and card
+    choices change, to cash, and an unfunded online order becomes a shop purchase (or is dropped where
+    the district has no shop of that category)."""
+    from collections import Counter
+    from arthasim import Config, World
+    from arthasim.modules.spending import ECOMMERCE_BILLER
+    world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)), seed=7)
+    s = world.state
+    Budget().monthly(world, dt.date(2025, 4, 1))
+    day = dt.date(2025, 4, 10)
+    dep = s.person_deposit[s.person_deposit >= 0]
+    owner = np.full(len(s.book), -1, dtype=np.int64)
+    owner[s.person_cash] = np.arange(len(s.person_cash))
+    owner[dep] = np.flatnonzero(s.person_deposit >= 0)
+
+    def rows(it):
+        return list(zip(owner[it.payer_acct].tolist(), it.purpose.tolist(), it.amount.tolist(),
+                        it.slot.tolist(), it.offset_s.tolist(), it.rail.tolist()))
+
+    s.book.balance[dep] = 10**12
+    rich = Consumption().intents(world, day)
+    s.book.balance[dep] = np.random.default_rng(2).integers(0, 2_000_000, dep.size)
+    mixed = rows(Consumption().intents(world, day))
+    balance = np.where(s.person_deposit >= 0, s.book.balance[np.maximum(s.person_deposit, 0)], -1)
+    online = rich.payee_acct == s.biller_deposit[ECOMMERCE_BILLER]
+    expected, droppable = Counter(), Counter()
+    for (person, purpose, amount, slot, off, rail), is_online in zip(rows(rich), online.tolist()):
+        digital = rail in (Rail.UPI_P2M, Rail.DEBIT_CARD)
+        key = (person, purpose, amount, slot, off, rail if not digital or balance[person] >= amount else Rail.CASH)
+        expected[key] += 1
+        if is_online and balance[person] < amount:
+            droppable[key] += 1
+    got = Counter(mixed)
+    assert not (got - expected)                                   # nothing new appears
+    assert not ((expected - got) - droppable)                     # only unfunded online orders may vanish
+    assert droppable and any(got[k] for k in droppable)            # some unfunded online orders went to a shop

@@ -81,6 +81,25 @@ def test_withdrawal_note_must_be_positive():
             run([5000, 0, 0, 100, 9000, 0], [cash], note=note)
 
 
+@settings(max_examples=400, deadline=None)
+@given(st.integers(0, 50_000), st.integers(0, 20_000), st.integers(0, 50_000), st.integers(1, 30_000),
+       st.integers(1, 5_000), st.sampled_from([1, 10, 100, 1_000]))
+def test_cash_payment_withdrawal_follows_the_rule(dep, cash, vault, amount, wd, note):
+    row = (Kind.CASH_PAYMENT, FlowType.CONSUMPTION, 3, 5, amount, Rail.CASH, 10, 0)
+    bal, s = run([dep, 0, 0, cash, vault, 0], [row], wd=wd, note=note)
+    take = 0                                                      # the rule, written out plainly
+    if cash < amount:
+        need = amount - cash
+        t = min(max(wd, -(-need // note) * note), dep // note * note)
+        take = t if t >= need and vault >= t else 0
+    paid = cash + take >= amount
+    assert bal.tolist() == [dep - take, 0, 0, cash + take - (amount if paid else 0), vault - take,
+                            amount if paid else 0]
+    expected = ([(Kind.CASH_WITHDRAWAL, take, Status.SUCCESS)] if take else []) + [
+        (Kind.CASH_PAYMENT, amount, Status.SUCCESS if paid else Status.DECLINED_FUNDS)]
+    assert list(zip(s.payments["kind"].tolist(), s.payments["amount"].tolist(), s.payments["status"].tolist())) == expected
+
+
 def test_rejects_bad_intents():
     for row in (pay(0, 1, 0, 1), pay(0, 1, -5, 1), pay(0, 1, 5, 96), pay(0, 1, 5, 1, off=900)):
         with pytest.raises(ValueError):
