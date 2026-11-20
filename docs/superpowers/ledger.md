@@ -190,3 +190,17 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-flexible-withdrawal.md`. Spec:
 
 - Task 1 (kernel rule): red (`settle_day` had no `withdrawal_note`), green; `settle_day` takes `withdrawal_note` (default 1) and the scheduler passes `cash.withdrawal_note_paise`; the existing withdrawal test's deposit-1,000 case now pays; whole suite 126 passed.
 - Task 2 (measure): slow gates 3 passed in 63 s. Funds declines fall from 4.35% to 3.85%, and withdrawals rise by about 10%.
+
+## Final review (flexible automatic withdrawal)
+
+- A fresh reviewer found it ready to merge: no critical or important findings. It checked edge cases, mutation tests and the ledger shape, and every figure reproduces. After the change, no automatic withdrawal is followed by a failed purchase; before, 43,581 were.
+- Deferred minors:
+  - no test pins that the scheduler passes the note size;
+  - a usual amount that is not a whole number of notes is rounded down when the account barely covers it (only with overridden values);
+  - `withdrawal_note` below 1 is not rejected (0 raises a division error mid-run);
+  - the allowance module keeps its own ₹100 note constant;
+  - tier XS spike runs change too (90 days, seed 7: 1,146,684 attempts against 1,144,327; funds declines 21.9% against 22.4%), so `phase0_results.md` no longer reproduces exactly;
+  - no upper limit per withdrawal (largest automatic withdrawals ₹1,17,500 by ATM and ₹88,800 by AePS);
+  - the results do not mention the 43,581 to 0 change;
+  - the `settle_day` docstring omits the conditions for a withdrawal.
+- Rulings on items the reviewer set aside: small withdrawals that empty nearly empty accounts (5,300 under ₹500), the whole-note cap, no adaptation to a short vault, and the allowance pre-withdrawal staying as it is all follow the approved design.
