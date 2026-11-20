@@ -235,7 +235,8 @@ Withdrawal counts and averages include the allowance module's own withdrawals be
 - 74,159 fewer funds declines over the 90 days. Cash declines fall by 75,860.
 - Withdrawals rise by about 10% (63,534 more), because payments that used to fail now trigger one:
   - 20,431 more withdrawals under ₹2,000, from accounts holding less than the usual amount;
-  - 45,453 more over ₹2,000, for large purchases.
+  - 45,453 more over ₹2,000, for large purchases;
+  - 2,350 fewer of exactly ₹2,000. A large purchase now takes one bigger withdrawal, where it used to take ₹2,000 and still fail.
 - Digital payments fail slightly more often. More money leaves accounts as cash during the day, while UPI and card choices are checked against the morning balance.
 - Households with no income now account for 43% of the remaining funds declines (39% before). Government transfers (plan 1d) remain the largest lever.
 
