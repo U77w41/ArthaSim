@@ -183,3 +183,10 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-upi-if-funded.md`. Spec: `docs
   - no test pins that an unfunded online order becomes a shop purchase rather than disappearing;
   - online orders fall 8.8% (123,041 to 112,165), which the results do not mention;
   - P2P UPI funds declines rise from 0.46% to 0.52% through extra withdrawals, although the rule leaves P2P alone.
+
+# Flexible automatic withdrawal execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-20-arthasim-flexible-withdrawal.md`. Spec: `docs/superpowers/specs/2026-11-20-flexible-withdrawal-design.md`.
+
+- Task 1 (kernel rule): red (`settle_day` had no `withdrawal_note`), green; `settle_day` takes `withdrawal_note` (default 1) and the scheduler passes `cash.withdrawal_note_paise`; the existing withdrawal test's deposit-1,000 case now pays; whole suite 126 passed.
+- Task 2 (measure): slow gates 3 passed in 63 s. Funds declines fall from 4.35% to 3.85%, and withdrawals rise by about 10%.

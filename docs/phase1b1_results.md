@@ -213,6 +213,32 @@ UPI at merchants, at billers and online now follows the card rule. A payer uses 
 - The net effect is 66,829 fewer funds declines over the 90 days.
 - UPI's share of attempts falls by 1.8 points. If plan 1e calibrates the rail mix against real UPI shares, it must count this rule.
 
+## Flexible automatic withdrawal (20 November 2026)
+
+Design: `docs/superpowers/specs/2026-11-20-flexible-withdrawal-design.md`. Plan: `docs/superpowers/plans/2026-11-20-arthasim-flexible-withdrawal.md`.
+
+When a payer is short of cash, the automatic withdrawal still takes ₹2,000 when the account can cover it. When the account holds less, it takes what is there in whole ₹100 notes, as long as that covers the shortfall. When the purchase needs more than ₹2,000 beyond the cash in hand, it takes enough, rounded up to ₹100. The new parameter `cash.withdrawal_note_paise` is ₹100. Same gate run (cards and UPI already checked against the balance), before and after.
+
+| | Before | After |
+| :--- | ---: | ---: |
+| Declined for funds, all attempts | 4.35% | 3.85% |
+| Cash attempts declined for funds | 6.4% | 5.7% |
+| ATM withdrawals (successful) | 429,817 | 472,740 |
+| AePS withdrawals (successful) | 204,412 | 225,023 |
+| Average withdrawal, ATM / AePS | ₹2,893 / ₹2,828 | ₹2,928 / ₹2,879 |
+| Homemakers / students / job seekers declined | 12.6% / 16.2% / 17.2% | 11.6% / 15.4% / 16.3% |
+| Salaried / retired declined | 1.4% / 1.1% | 0.6% / 0.8% |
+| IMPS / UPI_P2M / debit-card attempts declined for funds | 3.3% / 0.3% / 0.2% | 3.7% / 0.3% / 0.3% |
+
+Withdrawal counts and averages include the allowance module's own withdrawals before cash allowances, which this change does not touch.
+
+- 74,159 fewer funds declines over the 90 days. Cash declines fall by 75,860.
+- Withdrawals rise by about 10% (63,534 more), because payments that used to fail now trigger one:
+  - 20,431 more withdrawals under ₹2,000, from accounts holding less than the usual amount;
+  - 45,453 more over ₹2,000, for large purchases.
+- Digital payments fail slightly more often. More money leaves accounts as cash during the day, while UPI and card choices are checked against the morning balance.
+- Households with no income now account for 43% of the remaining funds declines (39% before). Government transfers (plan 1d) remain the largest lever.
+
 ## Exit criteria
 
 | Criterion | Result | Evidence |
