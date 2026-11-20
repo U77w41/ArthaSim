@@ -117,3 +117,13 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-allowance-margin.md`. Spec: `d
 - Ruling: `tests/test_build_1b.py` pins the registry at 89 rows; now 90 — the plan missed it — cost if wrong: none.
 - Task 2 (sweep): slow gates 3 passed in 64 s; bench gains `--set KEY=VALUE`, `recipient_declined_by_days_since_allowance` and `allowance_scaled_households`; margin swept over 0, 0.10, 0.15 and 0.20; margin 0 reproduces the earlier run exactly.
 - Finding: the margin is a small lever. Funds declines fall from 5.36% to 5.05% at 0.15; late-cycle declines fall by a third; households scaled down rise from 4% to 22%. What remains is spread across payment methods. The value stays at 0.15.
+
+## Final review (allowance margin)
+
+- A fresh reviewer read the branch: no critical findings, one important. Two minors were re-graded as important because they were false statements in the results.
+- Fixed in the results doc:
+  - it said recipients get more; 18% of them get less (reproduced: 4,888 of 26,665, decline rate 11.2% to 14.9%);
+  - it said early-cycle declines barely move; they fall 14 to 19%;
+  - it did not name the period or the denominator of each row.
+- Deferred minors: `--set` errors on a missing `=` or an unparsed `1e-1`; a test uses an import placed below it.
+- Rulings on items the reviewer set aside: padding earners' need follows the approved design and goes to the project owner as a decision; run manifests do not record parameter overrides (predates this branch); no range check on the margin (no parameter has one); the margin pads the head's bills too (per design).
