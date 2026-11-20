@@ -173,6 +173,9 @@ class Allowance(BehaviourModule):
         # A banked payer short of cash for today's cash allowances withdraws the shortfall first,
         # rounded up to whole notes.
         note = int(params.get("cash.withdrawal_note_paise"))
+        if note < 1:
+            raise ValueError(f"cash.withdrawal_note_paise (withdrawal_note) must be at least 1 paisa, "
+                             f"got {params.get('cash.withdrawal_note_paise')}")
         who, due = np.unique(payer[cash], return_inverse=True)
         total = np.bincount(due, weights=amount[cash], minlength=who.size).astype(np.int64)
         short = total - s.book.balance[s.person_cash[who]]

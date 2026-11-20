@@ -113,7 +113,7 @@ def test_habit_subset_and_determinism():
 def test_card_only_when_deposit_covers_amount(tmp_path):
     from arthasim import Config, World
     world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)), seed=7)
-    s, k, o = world.state, world.state.population.banking, world.state.population.orgs
+    s = world.state
     Budget().monthly(world, dt.date(2025, 4, 1))
     day = dt.date(2025, 4, 10)
     dep = s.person_deposit[s.person_deposit >= 0]

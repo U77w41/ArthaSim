@@ -143,7 +143,7 @@ Rows cover all 90 days, except the two household rows, which are June.
 - "Recipients" are homemakers, students and job seekers, counted from the last allowance they received.
 - The household rows count households with both surplus and a shortfall, not all households.
 - "Scaled down" means earners cannot cover every shortfall in full. It no longer depends on the margin.
-- "Cannot pay the full margin" includes the 4.0% that are scaled down, which pay no margin at all.
+- At any margin above 0, "cannot pay the full margin" includes the 4.0% that are scaled down, which pay no margin at all.
 
 - At 0.15, funds declines fall from 5.36% to 4.93%, and late-cycle declines (25 to 29 days) from 19% to 11.6%. The overall rate moves less for two reasons:
   - Homemakers, students and job seekers make only about a quarter of all payment attempts.
@@ -214,7 +214,7 @@ UPI at merchants, at billers and online now follows the card rule. A payer uses 
   - The other ~29,500 are purchases paid in cash in both runs. They used to succeed and now fail, because the moved purchases spent the cash first. This is about 10,000 a month. 91% of failed cash payments are under ₹2,000. An account too low to cover such a purchase cannot cover the fixed ₹2,000 automatic withdrawal either.
 - The net effect is 66,829 fewer funds declines over the 90 days.
 - UPI's share of attempts falls by 1.8 points. If plan 1e calibrates the rail mix against real UPI shares, it must count this rule.
-- Online orders fall 8.8% (123,041 to 112,165), because only funded payers now order online.
+- Online order attempts fall 8.8% (123,041 to 112,165), because only funded payers now order online. Completed online orders fall only 0.8% (111,523 to 110,674): most of the dropped orders used to fail for funds.
 - Person-to-person UPI funds declines rise from 0.46% to 0.52%, although the rule does not touch them. The likely cause is more automatic withdrawals draining deposits.
 
 ## Flexible automatic withdrawal (20 November 2026)

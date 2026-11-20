@@ -224,10 +224,20 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-flexible-withdrawal.md`. Spec:
   - Mutation checks, each caught by a test: the scheduler dropping the note size, online orders ungated, the vault checked against the shortfall, the usual amount rounded up, and the margin split equally among payers.
 - Docs: all figures re-queried before use.
   - card: 36,790 purchases moved and a third failed; the new bench key named;
-  - UPI: online orders down 8.8%, and P2P declines from 0.46% to 0.52%;
+  - UPI: online order attempts down 8.8% (completed orders down 0.8%), and P2P declines from 0.46% to 0.52%;
   - withdrawal: 43,581 to 0, and the tier XS figures (also noted in `phase0_results.md`);
   - margin: the 249 denominator (337 of 43,945 across all recipients) and the margin-short row note;
   - spec notes where the build departed from the design.
+- From the earlier lists:
+  - resolved by later changes: card holders without UPI who received cash but paid by card (card only if funded);
+  - pinned as designed: a usual amount that is not a whole number of notes is rounded down when the account caps it (property test);
+  - left as is: tests that set `small_world`'s budget state in place (order-independent today); and a strict `>` in the funding check, which no test distinguishes and which would change behaviour only for an exact balance.
+- After review of this tidy-up:
+  - a note size below 1 is also rejected where the allowance module reads it. Before, a population world failed there first with an unclear error;
+  - `--set` rejects values that are not finite, such as `nan` or `inf`. These had silently removed every allowance;
+  - the online figure now separates attempts from completed orders;
+  - the ordering test asserts that it met a same-slot tie;
+  - unused test variables removed.
 - Left for decisions, since they change outputs:
   - an upper limit per withdrawal;
   - allowance rails that follow where the payer's income lands;

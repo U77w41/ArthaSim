@@ -164,6 +164,7 @@ def test_world_runs_allowance(tmp_path):
 
 
 import polars as pl
+import pytest
 from hypothesis import given, settings, strategies as st
 
 
@@ -253,13 +254,29 @@ def test_allowance_over_the_upi_limit_goes_by_imps():
 
 
 def test_withdrawal_settles_before_the_allowance_it_funds():
-    _, _ = _month(2025, 4)                                         # sets the April budget
+    Budget().monthly(W, dt.date(2025, 4, 1))
     mod = Allowance()
     mod.monthly(W, dt.date(2025, 4, 1))
     owner = _owner()
+    checked = ties = 0
     for d in range(1, 31):
         it = mod.intents(W, dt.date(2025, 4, d)).sorted()
         payer = owner[it.payer_acct]
         for i in np.flatnonzero(it.kind == Kind.CASH_WITHDRAWAL):
             gifts = np.flatnonzero((payer == payer[i]) & (it.kind == Kind.CASH_PAYMENT))
             assert gifts.size and (gifts > i).all()
+            checked += 1
+            ties += int(((it.slot[gifts] == it.slot[i]) & (it.offset_s[gifts] == it.offset_s[i])).any())
+    assert checked > 0 and ties > 0          # a tie at the same slot and offset is where the order matters
+
+
+def test_note_below_one_is_rejected_by_the_allowance(tmp_path):
+    for note in (0, 0.5):
+        world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path / str(note))).with_params(
+            **{"cash.withdrawal_note_paise": note}), seed=7)
+        Budget().monthly(world, dt.date(2025, 4, 1))
+        mod = Allowance()
+        mod.monthly(world, dt.date(2025, 4, 1))
+        with pytest.raises(ValueError, match="withdrawal_note"):
+            for d in range(1, 31):
+                mod.intents(world, dt.date(2025, 4, d))

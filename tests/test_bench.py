@@ -17,3 +17,9 @@ def test_set_parses_key_and_value():
 def test_set_without_equals_names_the_argument():
     with pytest.raises(argparse.ArgumentTypeError, match="transfer.allowance_margin"):
         bench.parse_set("transfer.allowance_margin")
+
+
+def test_set_rejects_values_that_are_not_finite():
+    for raw in ("nan", ".nan", "inf", "-.inf", "Infinity"):
+        with pytest.raises(argparse.ArgumentTypeError, match="finite"):
+            bench.parse_set(f"transfer.allowance_margin={raw}")

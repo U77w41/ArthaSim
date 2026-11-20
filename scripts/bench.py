@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import datetime as dt
 import json
 import resource
@@ -30,6 +31,8 @@ def parse_set(text: str) -> tuple[str, object]:
             value = float(value)
         except ValueError:
             pass
+    if isinstance(value, float) and not math.isfinite(value):
+        raise argparse.ArgumentTypeError(f"--set {key} needs a finite number, got {raw!r}")
     return key, value
 
 
