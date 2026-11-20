@@ -43,7 +43,7 @@ Each adult spends an equal share of the household budget from their own accounts
 **Rail.** Sent to where the recipient spends from:
 
 - recipient has UPI: UPI P2P if the payer also has UPI and the amount is within the UPI limit; else IMPS if the payer is banked; else cash;
-- recipient has no UPI: cash, from payer's cash to recipient's cash. A payer short of cash withdraws first through the existing automatic withdrawal.
+- recipient has no UPI: cash, from payer's cash to recipient's cash. A payer short of cash withdraws first through the existing automatic withdrawal. (Changed during the build: that withdrawal took a fixed ₹2,000, so the module withdraws the day's shortfall itself, rounded up to whole notes of `cash.withdrawal_note_paise`.)
 
 **Accounting.** New `Purpose.ALLOWANCE` and `FlowType.HOUSEHOLD_TRANSFER`. Digital transfers are `Kind.PAYMENT` (deposit to deposit); cash is `Kind.CASH_PAYMENT` (cash to cash). Both nets are zero inside the household sector, so the flow-matrix invariants hold unchanged.
 

@@ -143,12 +143,13 @@ Rows cover all 90 days, except the two household rows, which are June.
 - "Recipients" are homemakers, students and job seekers, counted from the last allowance they received.
 - The household rows count households with both surplus and a shortfall, not all households.
 - "Scaled down" means earners cannot cover every shortfall in full. It no longer depends on the margin.
+- "Cannot pay the full margin" includes the 4.0% that are scaled down, which pay no margin at all.
 
 - At 0.15, funds declines fall from 5.36% to 4.93%, and late-cycle declines (25 to 29 days) from 19% to 11.6%. The overall rate moves less for two reasons:
   - Homemakers, students and job seekers make only about a quarter of all payment attempts.
   - The margin costs payers something. Allowances failing for the payer's funds rise from 2.1% to 2.6%, and payers' own purchases fail 1.30% of the time, against 1.27%.
 - Recipients who receive less, comparing each one's May and June allowances across the runs at 0 and 0.15:
-  - 249 of 26,665 (0.9%) receive less.
+  - 249 of the 26,665 homemakers, students and job seekers who receive an allowance (0.9%) receive less. Across all 43,945 recipients, 337 do.
   - In 247 of these, the amount set was at least as large, but more of the payments failed because the payer was short that day.
   - In the other 2, the household's budget moved between runs.
   - Within a month's state, the rule never lowers an allowance; a property test pins this.
@@ -186,7 +187,8 @@ Allowance recipients with a card and no UPI, over the 90 days:
 | Cash: share of their attempts, declined | 92.0%, 4.9% | 93.3%, 5.2% |
 
 - Card declines for funds nearly vanish. The 663 left come from other debits earlier the same day, because the check uses the morning balance. Before each failed card payment, the same account had made an earlier card purchase that day in 349 cases, UPI purchases in 248, a cash withdrawal in 64, and a bank transfer in 2.
-- A tenth of card purchases move to cash. Some of those fail there, so cash declines rise slightly. The overall rate still falls, from 4.93% to 4.79%.
+- 36,790 card purchases (8.7%) move to cash, and about a third of them fail there. Card funds declines fall by 34,687, and cash funds declines rise by 12,564. The overall rate still falls, from 4.93% to 4.79%.
+- The bench now reports `declined_funds_by_rail`, the share of each rail's attempts declined for funds.
 - UPI is untouched and is now the rail with the highest funds-decline rate (7.5%). The same rule could apply to UPI, but that is outside this change.
 
 ## UPI only if funded (20 November 2026)
@@ -212,6 +214,8 @@ UPI at merchants, at billers and online now follows the card rule. A payer uses 
   - The other ~29,500 are purchases paid in cash in both runs. They used to succeed and now fail, because the moved purchases spent the cash first. This is about 10,000 a month. 91% of failed cash payments are under ₹2,000. An account too low to cover such a purchase cannot cover the fixed ₹2,000 automatic withdrawal either.
 - The net effect is 66,829 fewer funds declines over the 90 days.
 - UPI's share of attempts falls by 1.8 points. If plan 1e calibrates the rail mix against real UPI shares, it must count this rule.
+- Online orders fall 8.8% (123,041 to 112,165), because only funded payers now order online.
+- Person-to-person UPI funds declines rise from 0.46% to 0.52%, although the rule does not touch them. The likely cause is more automatic withdrawals draining deposits.
 
 ## Flexible automatic withdrawal (20 November 2026)
 
@@ -238,7 +242,9 @@ Withdrawal counts and averages include the allowance module's own withdrawals be
   - 45,453 more over ₹2,000, for large purchases;
   - 2,350 fewer of exactly ₹2,000. A large purchase now takes one bigger withdrawal, where it used to take ₹2,000 and still fail.
 - Digital payments fail slightly more often. More money leaves accounts as cash during the day, while UPI and card choices are checked against the morning balance.
+- Before the change, 43,581 automatic withdrawals of ₹2,000 were followed by a failed purchase, because ₹2,000 was not enough. After it, none are.
 - Households with no income now account for 43% of the remaining funds declines (39% before). Government transfers (plan 1d) remain the largest lever.
+- The small spike world (tier XS) uses the same engine, so its phase 0 figures move. 90 days at seed 7 now give 1,146,684 attempts (1,144,327 in `phase0_results.md`) and 21.9% funds declines (22.4%).
 
 ## Exit criteria
 

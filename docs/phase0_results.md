@@ -4,6 +4,8 @@ Gate run on 15 November 2026: tier XS (10,000 persons), 90 simulated days from 2
 Command: `python scripts/bench.py --tier XS --days 90 --seed 7 --out runs`.
 Machine: the Linux sandbox this was built in. Rerun on your own machine for local numbers.
 
+Note, 20 November 2026: the flexible automatic withdrawal changed the settlement engine that tier XS also uses. The same command now gives 1,146,684 payment attempts and 21.9% funds declines. See `phase1b1_results.md`, "Flexible automatic withdrawal".
+
 ## Measured
 
 | Metric | Value |

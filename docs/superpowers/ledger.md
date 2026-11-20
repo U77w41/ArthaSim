@@ -204,3 +204,32 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-flexible-withdrawal.md`. Spec:
   - the results do not mention the 43,581 to 0 change;
   - the `settle_day` docstring omits the conditions for a withdrawal.
 - Rulings on items the reviewer set aside: small withdrawals that empty nearly empty accounts (5,300 under ₹500), the whole-note cap, no adaptation to a short vault, and the allowance pre-withdrawal staying as it is all follow the approved design.
+
+# Deferred minors tidy-up
+
+- Code (test-first):
+  - `settle_day` rejects a `withdrawal_note` below 1;
+  - its docstring states when a withdrawal goes ahead;
+  - cash-allowance withdrawals read `cash.withdrawal_note_paise` instead of a separate constant;
+  - `allowance_pairs` documents both stages and shares one margin-request helper;
+  - bench `--set` names a malformed argument and reads values such as `1e-1` as numbers;
+  - the bench helpers share one household mask.
+- Tests:
+  - a randomised check of the withdrawal rule against a plain restatement;
+  - every withdrawal in a real run is a whole number of notes (scheduler wiring);
+  - funding changes only the rails of unfunded purchases, and unfunded online orders go to shops (this replaces an assertion that could not fail);
+  - the allowance's exact pairs and per-payer surplus bound;
+  - an allowance over the UPI limit goes by IMPS;
+  - each allowance withdrawal settles before the allowance it funds.
+  - Mutation checks, each caught by a test: the scheduler dropping the note size, online orders ungated, the vault checked against the shortfall, the usual amount rounded up, and the margin split equally among payers.
+- Docs: all figures re-queried before use.
+  - card: 36,790 purchases moved and a third failed; the new bench key named;
+  - UPI: online orders down 8.8%, and P2P declines from 0.46% to 0.52%;
+  - withdrawal: 43,581 to 0, and the tier XS figures (also noted in `phase0_results.md`);
+  - margin: the 249 denominator (337 of 43,945 across all recipients) and the margin-short row note;
+  - spec notes where the build departed from the design.
+- Left for decisions, since they change outputs:
+  - an upper limit per withdrawal;
+  - allowance rails that follow where the payer's income lands;
+  - an allowance withdrawal that is all-or-nothing and sized from the morning's cash;
+  - medical bills paid in cash failing about two thirds of the time.

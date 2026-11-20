@@ -10,7 +10,7 @@ When a payer is short of cash for a cash payment, the settlement kernel withdraw
 
 | Approach | Trade-off | Verdict |
 | :--- | :--- | :--- |
-| Keep ₹2,000 as the usual amount; take what the account holds when it is less, or enough when the purchase needs more | ATM visit counts stay about the same; only today's failures change | Chosen |
+| Keep ₹2,000 as the usual amount; take what the account holds when it is less, or enough when the purchase needs more | ATM visit counts stay about the same (measured afterwards: about 10% more); only today's failures change | Chosen |
 | Withdraw exactly the shortfall each time | Many small withdrawals (₹300 at an ATM), unlike real use, and it distorts the withdrawal patterns a fraud model learns | Dropped |
 
 ## Design
