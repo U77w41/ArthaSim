@@ -70,6 +70,48 @@ Cash held at the end: persons ₹52.0 crore, merchants ₹3.2 crore, bank vaults
 
 The fix is a monthly allowance from earners to the other adults in their household, paid by UPI or cash. It would also add family transfers, a benign pattern a mule detector has to tell apart from layering. It is not in this plan.
 
+## Fix: household allowance (20 November 2026)
+
+Design: `docs/superpowers/specs/2026-11-19-household-allowance-design.md`. Plan: `docs/superpowers/plans/2026-11-19-arthasim-household-allowance.md`.
+
+Each month, every adult's need is their share of the household budget, plus the utilities bill and medical costs for the head. Members whose income exceeds their need cover the members who fall short, pro rata to their surplus. Salaried payers pay the day after payday; others on a fixed day of their own. A recipient who pays by UPI gets UPI or IMPS; anyone else gets cash, and a banked payer short of cash withdraws the difference first. Payments carry purpose `ALLOWANCE`.
+
+Same gate run as above (tier S, 90 days from 2025-04-01, seed 7), before and after the change, on an Apple M5 (10 cores, 16 GB, macOS 27.2, Python 3.12). The run before the change reproduces the sandbox run above exactly: 15,022,751 payment attempts and the same status shares.
+
+| Status | Before | After |
+| :--- | ---: | ---: |
+| SUCCESS | 78.3% | 94.4% |
+| DECLINED_FUNDS | 21.5% | 5.4% |
+| DECLINED_TECH | 0.3% | 0.3% |
+
+| Life stage | Declined for funds, before | After |
+| :--- | ---: | ---: |
+| Homemaker | 73% | 15% |
+| Studying | 71% | 19% |
+| Seeking work | 70% | 20% |
+| Retired | 13% | 1.5% |
+| Farm | 9% | 5% |
+| Casual | 6% | 2.5% |
+| Gig | 3% | 1% |
+| Salaried | 2% | 1.5% |
+| Self-employed | 1% | 0.5% |
+
+Homemakers, students and job seekers, by month and by whether their household has any income:
+
+| Month | Household has income | Household has none |
+| :--- | ---: | ---: |
+| April | 17% | 23% |
+| May | 8% | 61% |
+| June | 8% | 78% |
+
+- Allowances are 1.25% of payment attempts (191,000 in 90 days, ₹142 crore). 97.7% succeed; 2.1% fail for funds, mostly cash allowances.
+- April is higher because allowances arrive after payday, so members first spend down their opening balances. From May, non-earners who live with an earner fail about 8% of the time.
+- Households where nobody earns (6.6% of households) are now the main source of declines: 33% of all insufficient-funds declines, up from 8%. Their members run out of savings within two months. Government transfers (DBT, plan 1d) are the fix.
+- Median spending to income, households with income: April 0.595, May 0.673, June 0.697 (before: 0.53, 0.512, 0.515).
+- Cost: 2% more payment attempts (15,344,393), 3% more simulation time (18.0 s against 17.5 s for 90 days), peak memory 2,278 MB against 2,200 MB.
+
+Command: `python scripts/bench.py --tier S --days 90 --seed 7 --out runs`; `declined_funds_by_life_stage` and `declined_funds_no_income_households` are now in its output.
+
 ## Exit criteria
 
 | Criterion | Result | Evidence |

@@ -76,3 +76,20 @@ Plan: `docs/superpowers/plans/2026-11-16-arthasim-plan-1b1-money-flows.md`
 
 - No independent review has been run; this harness has no subagent tool.
 - Final suite: 102 fast tests and 3 slow gate tests (phase 0, 1a, 1b-1) passing on the final commit.
+
+# Household allowance execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-19-arthasim-household-allowance.md`. Spec: `docs/superpowers/specs/2026-11-19-household-allowance-design.md`.
+Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PYTHONPATH=src` (the package is not installed on that machine).
+
+## Tasks
+
+- Task 1 (pooling rule, enums): red (module missing), green 5 passed.
+- Ruling: `person_need` drops the planned `household_of_person` parameter — the per-household arrays are indexed through `head`, so it was never read — cost if wrong: one parameter re-added.
+- Task 2 (module, days, rails): red (import error), green 11 passed (plan: 10).
+- Ruling: a banked payer whose cash on hand is short of the day's cash allowances withdraws the shortfall, rounded up to ₹100, before paying — the spec relied on the kernel's automatic withdrawal, which takes a fixed ₹2,000, so most cash allowances from salaried earners would have failed; pinned by `test_cash_payer_withdraws_shortfall_first` — cost if wrong: extra withdrawal rows and more cash held by recipients.
+- Ruling: slot and offset draws are keyed on the (payer, recipient) pair, not the payer alone — two allowances from one payer on one day would otherwise share a timestamp and a technical-decline draw — cost if wrong: none to the money flows.
+- Task 3 (world integration): red (module list), green; whole suite 114 passed.
+- Ruling: `tests/test_money_flows.py` pins the module list, so its expected list gains `allowance` — the plan missed this test — cost if wrong: none.
+- Task 4 (measurement): slow gates 3 passed in 65 s; bench before and after on the same machine; results in `docs/phase1b1_results.md`. `runs/` added to `.gitignore`.
+- Finding: funds declines fall from 21.5% to 5.4% of attempts. What remains comes mostly from households with no income (plan 1d) and from the first month, before the first allowance arrives.

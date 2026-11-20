@@ -69,7 +69,13 @@ _GROUPS = {
     "spending": ("GROCERY", "FOOD", "FUEL", "PHARMACY", "APPAREL", "ELECTRONICS", "TRANSPORT", "SERVICES",
                  "OTHER", "UTILITIES", "TELECOM", "MEDICAL"),
     "cash": ("CASH_WITHDRAWAL", "CASH_DEPOSIT"),
+    "transfers": ("ALLOWANCE",),
 }
+
+_PAYER_PERSON = """
+    from payments y
+    join accounts a on a.account_id = y.payer_account_id
+    join persons p on p.entity_id = a.holder_entity_id"""
 
 
 def _money_flow_summary(world, run) -> dict:
@@ -98,6 +104,17 @@ def _money_flow_summary(world, run) -> dict:
         left join spend s on s.household_id = h.household_id and s.month = h.month
         where h.income_paise > 0
         group by 1 order by 1""")
+    by_stage = run.sql(f"""
+        select p.life_stage as k, avg(case when y.status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as share
+        {_PAYER_PERSON}
+        group by 1 order by 2 desc""")
+    no_income = run.sql(f"""
+        with d as (
+            select p.household_id, strftime(make_timestamp(y.intent_ts) + interval 330 minute, '%Y-%m') as month
+            {_PAYER_PERSON}
+            where y.status = 'DECLINED_FUNDS')
+        select avg(case when h.income_paise = 0 then 1.0 else 0.0 end) as share
+        from d join truth_household_monthly h on h.household_id = d.household_id and h.month = d.month""")
     s, book = world.state, world.state.book
     cash = book.type == T.CASH
     held = lambda accounts: int(book.balance[accounts].sum()) / 100
@@ -105,6 +122,8 @@ def _money_flow_summary(world, run) -> dict:
         "rail_share": shares("rail"),
         "purpose_group_share": groups,
         "spend_to_income_median_by_month": {mo: round(r, 3) for mo, r, _ in ratio.iter_rows()},
+        "declined_funds_by_life_stage": {k: round(v, 4) for k, v in by_stage.iter_rows()},
+        "declined_funds_no_income_households": round(float(no_income["share"][0] or 0.0), 4),
         "cash_held_rupees_at_end": {
             "persons": held(s.person_cash), "merchants": held(s.merchant_cash), "billers": held(s.biller_cash),
             "bank_vaults": held(s.bank_vault), "boundary": held([s.boundary_cash]),
