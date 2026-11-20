@@ -27,6 +27,7 @@ class FlowType(IntEnum):
     EARNINGS = 6
     PENSION = 7
     REMITTANCE = 8
+    HOUSEHOLD_TRANSFER = 9
 
 
 class LedgerError(Exception):

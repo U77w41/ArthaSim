@@ -36,6 +36,7 @@ class Purpose(IntEnum):
     PENSION = 3
     EMPLOYER_REVENUE = 4
     REMITTANCE = 5
+    ALLOWANCE = 6           # earner to a member of their own household
     GROCERY = 10            # merchant category k has purpose 10 + k
     FOOD = 11
     FUEL = 12
