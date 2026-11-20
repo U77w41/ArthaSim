@@ -1,6 +1,7 @@
 """Phase 0 gate run: simulate, then report throughput and memory.
 
     python scripts/bench.py --tier XS --days 90 --seed 7 --out runs
+    python scripts/bench.py --tier S --days 90 --seed 7 --out runs --set transfer.allowance_margin=0.1
 """
 from __future__ import annotations
 
@@ -11,6 +12,9 @@ import resource
 import sys
 import time
 
+import numpy as np
+import yaml
+
 from arthasim import Config, World
 
 
@@ -20,9 +24,12 @@ def main(argv: list[str] | None = None) -> dict:
     ap.add_argument("--days", type=int, default=90)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default="runs")
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+                    help="override a registry parameter; repeatable")
     args = ap.parse_args(argv)
 
-    config = Config.tier(args.tier, out_dir=f"{args.out}/bench-{int(time.time())}")
+    overrides = {k: yaml.safe_load(v) for k, v in (s.split("=", 1) for s in args.set)}
+    config = Config.tier(args.tier, out_dir=f"{args.out}/bench-{int(time.time())}").with_params(**overrides)
     started = time.perf_counter()
     world = World.build(config, seed=args.seed)
     build_seconds = time.perf_counter() - started
@@ -42,6 +49,7 @@ def main(argv: list[str] | None = None) -> dict:
         "build_seconds": round(build_seconds, 2),
         "total_seconds": round(total_seconds, 2),
         "status_share": {s: round(n / m["payments"], 4) for s, n in status.iter_rows()},
+        "param_overrides": overrides,
         "run_path": run.path,
     }
     if m.get("builder") == "population":
@@ -115,6 +123,24 @@ def _money_flow_summary(world, run) -> dict:
             where y.status = 'DECLINED_FUNDS')
         select avg(case when h.income_paise = 0 then 1.0 else 0.0 end) as share
         from d join truth_household_monthly h on h.household_id = d.household_id and h.month = d.month""")
+    by_days = run.sql("""
+        with recv as (
+            select b.holder_entity_id as person, y.intent_ts as ts
+            from payments y join accounts b on b.account_id = y.payee_account_id
+            where y.purpose = 'ALLOWANCE' and y.status = 'SUCCESS'),
+        att as (
+            select p.entity_id as person, y.intent_ts as ts, y.status
+            from payments y join accounts a on a.account_id = y.payer_account_id
+            join persons p on p.entity_id = a.holder_entity_id
+            where p.life_stage in ('homemaker', 'studying', 'seeking')
+              and y.purpose not in ('ALLOWANCE', 'CASH_WITHDRAWAL', 'CASH_DEPOSIT')),
+        j as (
+            select att.status, (att.ts - recv.ts) // 86400000000 as days
+            from att asof join recv on att.person = recv.person and att.ts >= recv.ts)
+        select case when days < 10 then '0-9' when days < 20 then '10-19' when days < 25 then '20-24'
+                    when days < 30 then '25-29' else '30+' end as k,
+               avg(case when status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as share
+        from j group by 1 order by 1""")
     s, book = world.state, world.state.book
     cash = book.type == T.CASH
     held = lambda accounts: int(book.balance[accounts].sum()) / 100
@@ -124,11 +150,29 @@ def _money_flow_summary(world, run) -> dict:
         "spend_to_income_median_by_month": {mo: round(r, 3) for mo, r, _ in ratio.iter_rows()},
         "declined_funds_by_life_stage": {k: round(v, 4) for k, v in by_stage.iter_rows()},
         "declined_funds_no_income_households": round(float(no_income["share"][0] or 0.0), 4),
+        "recipient_declined_by_days_since_allowance": {k: round(v, 4) for k, v in by_days.iter_rows()},
+        "allowance_scaled_households": _scaled_households(world),
         "cash_held_rupees_at_end": {
             "persons": held(s.person_cash), "merchants": held(s.merchant_cash), "billers": held(s.biller_cash),
             "bank_vaults": held(s.bank_vault), "boundary": held([s.boundary_cash]),
             "total": int(book.balance[cash].sum()) / 100},
     }
+
+
+def _scaled_households(world) -> float:
+    """Of households with both surplus and shortfall in the last simulated month, the share whose
+    allowances are scaled down because surplus cannot cover every shortfall."""
+    from arthasim.modules.allowance import allowance_need, household_scale
+
+    pop = world.state.population
+    hh, income = pop.households.household_of_person, pop.attributes.monthly_income_paise
+    need = allowance_need(world)
+    scale = household_scale(hh, income, need)
+    n = scale.size
+    short = np.bincount(hh, weights=np.maximum(0.0, need - income), minlength=n) > 0
+    surplus = np.bincount(hh, weights=np.maximum(0.0, income - need), minlength=n) > 0
+    both = short & surplus
+    return round(float((scale[both] < 1).mean()), 4) if both.any() else 0.0
 
 
 if __name__ == "__main__":

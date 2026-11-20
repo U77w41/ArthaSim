@@ -115,6 +115,37 @@ Homemakers, students and job seekers, by month and by whether their household ha
 
 Command: `python scripts/bench.py --tier S --days 90 --seed 7 --out runs`; `declined_funds_by_life_stage` and `declined_funds_no_income_households` are now in its output.
 
+## Allowance margin (20 November 2026)
+
+Design: `docs/superpowers/specs/2026-11-20-allowance-margin-design.md`. Plan: `docs/superpowers/plans/2026-11-20-arthasim-allowance-margin.md`.
+
+Every adult's need is padded by `transfer.allowance_margin` before pooling, so recipients get more than their expected spending and earners keep the same headroom on their own. Same gate run and machine as above, swept with `--set transfer.allowance_margin=M`. A margin of 0 reproduces the run without it exactly (15,344,393 attempts).
+
+| Margin | 0 | 0.10 | 0.15 | 0.20 |
+| :--- | ---: | ---: | ---: | ---: |
+| Declined for funds, all attempts | 5.36% | 5.10% | 5.05% | 5.05% |
+| Homemakers | 15.4% | 14.7% | 14.6% | 14.7% |
+| Students | 19.1% | 18.5% | 18.5% | 18.5% |
+| Job seekers | 19.9% | 19.3% | 19.3% | 19.3% |
+| Retired | 1.5% | 1.2% | 1.1% | 1.1% |
+| Recipients, 0 to 9 days after their allowance | 3.2% | 2.9% | 2.8% | 2.7% |
+| 10 to 19 days | 6.3% | 5.4% | 5.2% | 5.1% |
+| 20 to 24 days | 10.9% | 8.6% | 8.2% | 8.1% |
+| 25 to 29 days | 19.0% | 14.2% | 13.1% | 12.6% |
+| 30 days or more | 36.0% | 29.4% | 28.8% | 27.4% |
+| Households scaled down (June) | 4.0% | 17.9% | 22.1% | 27.9% |
+| Share of funds declines from households with no income | 32.9% | 34.6% | 34.9% | 34.9% |
+
+"Recipients" are homemakers, students and job seekers, counted from the last allowance they received. "Households scaled down" is the share of households with both surplus and shortfall whose earners cannot cover every shortfall in full.
+
+- The margin cuts late-cycle declines by about a third (25 to 29 days: 19% to 13% at 0.15). Declines earlier in the cycle barely move, so the overall rate falls only from 5.36% to 5.05%.
+- Gains flatten above 0.10. The cost is more households scaled down: the padded need of earners leaves less surplus to pass on.
+- The value stays at 0.15, as designed. It is slightly better than 0.10 late in the cycle, and fewer than a quarter of households are scaled down. Both are assumptions for plan 1e to calibrate.
+- What remains for homemakers, students and job seekers in households with income (June, margin 0.15) is spread across payment methods. Their cash purchases fail 4.9% of the time if banked and 6.7% if not, UPI purchases 7.7%, and debit-card purchases 25.5%. The card rate is the known gap: card holders without UPI receive their allowance in cash. A margin is not the lever for the rest.
+- Cost: negligible (17.7 s for 90 days; 0.05% more attempts).
+
+Commands: `python scripts/bench.py --tier S --days 90 --seed 7 --out runs --set transfer.allowance_margin=M`. `recipient_declined_by_days_since_allowance` and `allowance_scaled_households` are now in the output.
+
 ## Exit criteria
 
 | Criterion | Result | Evidence |

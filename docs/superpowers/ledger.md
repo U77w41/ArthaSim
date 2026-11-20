@@ -105,3 +105,15 @@ Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PY
   - the design still says the automatic withdrawal covers cash allowances;
   - rounding can exceed a payer's surplus by up to 2 paise.
 - Rulings on items the reviewer set aside: remittances received are not pooled as income; recipients get no margin over expected spending; the need includes telecom for people without a mobile. All three follow the approved design. The fixed ₹2,000 automatic withdrawal and unmodelled IMPS limits are kernel scope.
+
+# Allowance margin execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-20-arthasim-allowance-margin.md`. Spec: `docs/superpowers/specs/2026-11-20-allowance-margin-design.md`.
+
+## Tasks
+
+- Task 1 (margin parameter, `household_scale`, `allowance_need`): red (import error), green 16 passed; whole suite 118 passed.
+- Ruling: `test_margin_parameter` reads the value through `P.get` — `ParamRegistry.table()` holds values as text, so the planned comparison with 0.15 could never pass — cost if wrong: none.
+- Ruling: `tests/test_build_1b.py` pins the registry at 89 rows; now 90 — the plan missed it — cost if wrong: none.
+- Task 2 (sweep): slow gates 3 passed in 64 s; bench gains `--set KEY=VALUE`, `recipient_declined_by_days_since_allowance` and `allowance_scaled_households`; margin swept over 0, 0.10, 0.15 and 0.20; margin 0 reproduces the earlier run exactly.
+- Finding: the margin is a small lever. Funds declines fall from 5.36% to 5.05% at 0.15; late-cycle declines fall by a third; households scaled down rise from 4% to 22%. What remains is spread across payment methods. The value stays at 0.15.
