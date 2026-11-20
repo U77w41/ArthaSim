@@ -108,3 +108,35 @@ def test_habit_subset_and_determinism():
     for field in ("payee_acct", "amount", "rail", "slot", "purpose"):
         assert np.array_equal(np.sort(getattr(full, field)[mine]), np.sort(getattr(part, field)))
     assert np.array_equal(Consumption().intents(W, day).amount, full.amount)
+
+
+def test_card_only_when_deposit_covers_amount(tmp_path):
+    from arthasim import Config, World
+    world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)), seed=7)
+    s, k, o = world.state, world.state.population.banking, world.state.population.orgs
+    Budget().monthly(world, dt.date(2025, 4, 1))
+    day = dt.date(2025, 4, 10)
+    dep = s.person_deposit[s.person_deposit >= 0]
+
+    s.book.balance[dep] = 0
+    assert not (Consumption().intents(world, day).rail == Rail.DEBIT_CARD).any()
+    s.book.balance[dep] = 10**12
+    assert (Consumption().intents(world, day).rail == Rail.DEBIT_CARD).any()
+
+    s.book.balance[dep] = np.random.default_rng(0).integers(0, 2_000_000, dep.size)
+    it = Consumption().intents(world, day)
+    card = it.rail == Rail.DEBIT_CARD
+    assert card.any() and (s.book.balance[it.payer_acct[card]] >= it.amount[card]).all()
+    # Some card holders at card-accepting merchants paid cash because their balance was short.
+    cash_payer = np.flatnonzero(it.rail == Rail.CASH)
+    holder = np.full(len(s.book), -1, dtype=np.int64)
+    holder[s.person_cash] = np.arange(len(s.person_cash))
+    person = holder[it.payer_acct[cash_payer]]
+    merchant_of = np.full(len(s.book), -1, dtype=np.int64)
+    merchant_of[s.merchant_cash] = np.arange(len(s.merchant_cash))
+    merchant = merchant_of[it.payee_acct[cash_payer]]
+    at_shop = merchant >= 0
+    person, merchant, amount = person[at_shop], merchant[at_shop], it.amount[cash_payer][at_shop]
+    short = (k.person_has_card[person] & o.merchant_accepts_card[merchant] & (s.person_deposit[person] >= 0)
+             & (s.book.balance[np.maximum(s.person_deposit[person], 0)] < amount))
+    assert short.any()

@@ -122,7 +122,10 @@ class Consumption(BehaviourModule):
                 rows[key].append(np.broadcast_to(np.asarray(value, dtype=np.int64), person.shape))
 
         def rail_for(person, amount, m_upi, m_card, entity, index):
-            return choose_rail(amount, k.person_upi[person], k.person_has_card[person], m_upi, m_card,
+            # A card is used only when the account covers the amount at the start of the day.
+            dep = s.person_deposit[person]
+            funded = (dep >= 0) & (s.book.balance[np.maximum(dep, 0)] >= amount)
+            return choose_rail(amount, k.person_upi[person], k.person_has_card[person] & funded, m_upi, m_card,
                                rng.uniform(seed, S("cons.upi"), entity, d, index),
                                rng.uniform(seed, S("cons.card"), entity, d, index), params)
 
