@@ -1,9 +1,19 @@
 """Household allowances: earners pass money to members whose own income falls short of their need."""
 from __future__ import annotations
 
+import calendar
+import datetime as dt
+
 import numpy as np
 
+from arthasim.engine import rng
+from arthasim.engine.intents import Intents, Purpose, Rail
+from arthasim.ledger.journal import FlowType, Kind
+from arthasim.modules.base import BehaviourModule
+from arthasim.modules.spending import UTILITIES
+
 _EMPTY = np.empty(0, dtype=np.int64)
+_NOTE = 10_000                     # withdrawals are rounded up to whole hundreds of rupees
 
 
 def person_need(person_budget: np.ndarray, budget: np.ndarray, medical_due: np.ndarray, head: np.ndarray,
@@ -50,3 +60,75 @@ def allowance_pairs(household_of_person: np.ndarray, income: np.ndarray,
     p, r, amount = p[keep], r[keep], amount[keep]
     order = np.lexsort((r, p))
     return p[order], r[order], amount[order]
+
+
+def allowance_day(payday: np.ndarray, keyed_day: np.ndarray, days_in_month: int) -> np.ndarray:
+    """Day of the month a payer gives allowances: the day after their salary (capped at the month's
+    last day) for salaried payers (payday >= 1), else their own keyed day."""
+    payday = np.asarray(payday, dtype=np.int64)
+    return np.where(payday >= 1, np.minimum(payday + 1, days_in_month), np.asarray(keyed_day, dtype=np.int64))
+
+
+class Allowance(BehaviourModule):
+    """Monthly allowances inside households, paid where the recipient spends from."""
+
+    name = "allowance"
+
+    def __init__(self) -> None:
+        self._pairs: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None = None
+
+    def monthly(self, world, month: dt.date) -> None:
+        s, params, seed = world.state, world.params, world.seed
+        pop, beh, h = s.population, s.behaviour, s.population.households
+        kinds = np.array([d.kind for d in pop.districts])
+        u = np.where(kinds[pop.persons.district] == "metro",
+                     params.get("consumption.category_shares.metro")[UTILITIES],
+                     params.get("consumption.category_shares.rural")[UTILITIES])
+        need = person_need(beh.person_budget, beh.budget, beh.medical_due, h.head, u)
+        payer, recipient, amount = allowance_pairs(h.household_of_person, pop.attributes.monthly_income_paise, need)
+        employer = s.person_employer[payer]
+        payday = np.full(payer.size, -1, dtype=np.int64)
+        payday[employer >= 0] = s.employer_payday[employer[employer >= 0]]
+        keyed = 1 + np.minimum((rng.uniform(seed, rng.stream_id("allow.day"), payer, 0) * 28).astype(np.int64), 27)
+        days = calendar.monthrange(month.year, month.month)[1]
+        self._pairs = (payer, recipient, amount, allowance_day(payday, keyed, days))
+
+    def intents(self, world, day: dt.date) -> Intents:
+        if self._pairs is None:
+            return Intents.empty()
+        payer, rec, amount, pay_day = self._pairs
+        today = pay_day == day.day
+        payer, rec, amount = payer[today], rec[today], amount[today]
+        n = payer.size
+        if n == 0:
+            return Intents.empty()
+        s, params, seed = world.state, world.params, world.seed
+        upi, d, S = s.population.banking.person_upi, day.toordinal(), rng.stream_id
+
+        # Rail follows the recipient: digital to someone who pays by UPI, else cash in hand.
+        p2p = upi[rec] & upi[payer] & (amount <= params.get("rail.upi.limit_paise"))
+        imps = upi[rec] & ~p2p & (s.person_deposit[payer] >= 0)
+        cash = ~(p2p | imps)
+        rail = np.where(p2p, int(Rail.UPI_P2P), np.where(imps, int(Rail.IMPS), int(Rail.CASH)))
+        pair = payer * len(s.person_ids) + rec
+        slot = 48 + np.minimum((rng.uniform(seed, S("allow.slot"), pair, d) * 32).astype(np.int64), 31)
+        off = np.minimum((rng.uniform(seed, S("allow.offset"), pair, d) * 900).astype(np.int64), 899)
+        transfers = Intents(np.where(cash, int(Kind.CASH_PAYMENT), int(Kind.PAYMENT)),
+                            np.full(n, int(FlowType.HOUSEHOLD_TRANSFER)),
+                            np.where(cash, s.person_cash[payer], s.person_deposit[payer]),
+                            np.where(cash, s.person_cash[rec], s.person_deposit[rec]),
+                            amount, rail, slot, off, np.full(n, int(Purpose.ALLOWANCE)))
+
+        # A banked payer short of cash for today's cash allowances withdraws the shortfall first.
+        who, due = np.unique(payer[cash], return_inverse=True)
+        total = np.bincount(due, weights=amount[cash], minlength=who.size).astype(np.int64)
+        short = total - s.book.balance[s.person_cash[who]]
+        go = (short > 0) & (s.person_deposit[who] >= 0)
+        who, short = who[go], short[go]
+        m = who.size
+        wd_rail = (s.withdraw_rail[s.person_cash[who]] if s.withdraw_rail is not None
+                   else np.full(m, int(Rail.ATM)))
+        withdrawals = Intents(np.full(m, int(Kind.CASH_WITHDRAWAL)), np.full(m, int(FlowType.CASH_CONVERSION)),
+                              s.person_deposit[who], s.person_cash[who], -(-short // _NOTE) * _NOTE, wd_rail,
+                              np.full(m, 48), np.zeros(m), np.full(m, int(Purpose.CASH_WITHDRAWAL)))
+        return Intents.concat([withdrawals, transfers])
