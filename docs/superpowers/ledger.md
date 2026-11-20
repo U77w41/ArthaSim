@@ -92,4 +92,16 @@ Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PY
 - Task 3 (world integration): red (module list), green; whole suite 114 passed.
 - Ruling: `tests/test_money_flows.py` pins the module list, so its expected list gains `allowance` — the plan missed this test — cost if wrong: none.
 - Task 4 (measurement): slow gates 3 passed in 65 s; bench before and after on the same machine; results in `docs/phase1b1_results.md`. `runs/` added to `.gitignore`.
-- Finding: funds declines fall from 21.5% to 5.4% of attempts. What remains comes mostly from households with no income (plan 1d) and from the first month, before the first allowance arrives.
+- Finding: funds declines fall from 21.5% to 5.4% of attempts. Of what remains over 90 days, households with no income cause 33% (plan 1d) and households with income 67%, mostly because an allowance has no margin over expected spending and recipients run short late in each cycle. The success measure in the design is only partly met.
+
+## Final review (household allowance)
+
+- A fresh reviewer read the whole branch: no critical findings, one important. Fixed: the results doc said households with no income were the main source of the remaining declines; they cause 33% (half in June). Numbers re-run before restating them.
+- Deferred minors:
+  - card holders without UPI get cash but pay by card;
+  - payers paid mostly in cash send digital allowances from deposits their income rarely refills;
+  - the pre-withdrawal is sized at the start of the day and is all-or-nothing;
+  - test gaps: allowances over the UPI limit, withdrawal ordering, shared fixture state;
+  - the design still says the automatic withdrawal covers cash allowances;
+  - rounding can exceed a payer's surplus by up to 2 paise.
+- Rulings on items the reviewer set aside: remittances received are not pooled as income; recipients get no margin over expected spending; the need includes telecom for people without a mobile. All three follow the approved design. The fixed ₹2,000 automatic withdrawal and unmodelled IMPS limits are kernel scope.

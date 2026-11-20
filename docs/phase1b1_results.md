@@ -106,7 +106,10 @@ Homemakers, students and job seekers, by month and by whether their household ha
 
 - Allowances are 1.25% of payment attempts (191,000 in 90 days, ₹142 crore). 97.7% succeed; 2.1% fail for funds, mostly cash allowances.
 - April is higher because allowances arrive after payday, so members first spend down their opening balances. From May, non-earners who live with an earner fail about 8% of the time.
-- Households where nobody earns (6.6% of households) are now the main source of declines: 33% of all insufficient-funds declines, up from 8%. Their members run out of savings within two months. Government transfers (DBT, plan 1d) are the fix.
+- What remains, over the 90 days (822,832 insufficient-funds declines): households where nobody earns (6.6% of households) cause 33%, up from 8%; non-earners in households with income 46%; everyone else in households with income 21%. In June the split is even: 128,443 declines from households with no income, 127,366 from households with income.
+- Households with no income: their members run out of savings within two months. Government transfers (DBT, plan 1d) fix this part only.
+- Households with income: the allowance equals the recipient's expected spending with no margin, so recipients run short late in each cycle. In June, non-earners fail 3% of attempts in the 10 days after their allowance, 6% at 10 to 19 days, 10% at 20 to 24, 18% at 25 to 29, and 36% at 30 days or more (May has 31 days). The review found two smaller causes: households whose surplus cannot cover every shortfall, and card holders without UPI, who receive cash but pay by card from an account nothing refills.
+- So the design's success measure is only partly met. Declines for homemakers, students and job seekers fall from about 70% to 15 to 20%, but what remains does not come mostly from households with no income.
 - Median spending to income, households with income: April 0.595, May 0.673, June 0.697 (before: 0.53, 0.512, 0.515).
 - Cost: 2% more payment attempts (15,344,393), 3% more simulation time (18.0 s against 17.5 s for 90 days), peak memory 2,278 MB against 2,200 MB.
 
