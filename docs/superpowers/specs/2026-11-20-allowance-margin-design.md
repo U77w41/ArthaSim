@@ -16,15 +16,18 @@ An allowance equals the recipient's expected spending exactly, so recipients run
 
 | Approach | Trade-off | Verdict |
 | :--- | :--- | :--- |
-| Inflate every adult's need by a margin before pooling | One parameter; recipients accumulate the unspent margin, but the household buffer is unchanged because it already counts every member | Chosen |
-| Margin on recipients only | Someone whose income lies between need and need plus margin would both give and receive | Dropped |
+| Pay the margin only from surplus left after every shortfall is covered | Nobody receives less than without a margin; stretched households get no margin | Chosen (revised 20 November 2026) |
+| Inflate every adult's need by a margin before pooling | One input change, but padding earners' need shrinks their surplus: in the first build, 18% of recipients received less and failed more often | Built first, replaced after review |
 | Top each recipient up to a target balance | Bounded balances, but it reads balances ("rescue", which the allowance design ruled out) and fights mid-month pay days | Dropped |
 
 ## Design
 
 - New registry parameter `transfer.allowance_margin`, value 0.15, status `assumption`.
-- `Allowance.monthly` passes `need * (1 + margin)` to `allowance_pairs`. Nothing else changes: shortfall, surplus, scaling, days and rails stay as they are.
-- A margin of 0 reproduces the current behaviour exactly.
+- Recipients and payers are classified on the unpadded need, as before: shortfall `max(0, need - income)`, surplus `max(0, income - need)`. Nobody both gives and receives.
+- Stage 1 is unchanged: every shortfall is covered pro rata to surplus, scaled down alike if surplus falls short.
+- Stage 2: surplus left after stage 1 pays each recipient a margin of `margin * need`, pro rata to surplus, scaled down alike if the leftover falls short. A household scaled down in stage 1 has no leftover and pays no margin.
+- One payment per (payer, recipient) pair carries both stages: `rint(surplus_p / total_surplus * (shortfall_r * scale + margin * need_r * margin_scale))`.
+- A margin of 0 reproduces the behaviour without one exactly; for a given month's state, a margin never lowers what any recipient receives.
 
 ## Success measure
 
