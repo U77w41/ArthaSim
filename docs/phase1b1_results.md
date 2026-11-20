@@ -207,7 +207,7 @@ UPI at merchants, at billers and online now follows the card rule. A payer uses 
 | Recipients, 0 to 9 days after their allowance | 2.0% | 1.3% |
 
 - 274,204 purchases (8% of UPI_P2M attempts) move from UPI to cash. UPI funds declines fall by 250,567.
-- Cash funds declines rise by 183,509, two thirds of the purchases that moved. Most payers whose account is short hold too little cash as well. The automatic withdrawal cannot help them either, because it needs ₹2,000 in the account.
+- Cash funds declines rise by 183,509, two thirds of the purchases that moved. Most payers whose account is short hold too little cash as well. 91% of failed cash payments are under ₹2,000. An account too low to cover such a purchase cannot cover the fixed ₹2,000 automatic withdrawal either.
 - The net effect is 66,829 fewer funds declines over the 90 days.
 - UPI's share of attempts falls by 1.8 points. If plan 1e calibrates the rail mix against real UPI shares, it must count this rule.
 
