@@ -140,3 +140,30 @@ def test_card_only_when_deposit_covers_amount(tmp_path):
     short = (k.person_has_card[person] & o.merchant_accepts_card[merchant] & (s.person_deposit[person] >= 0)
              & (s.book.balance[np.maximum(s.person_deposit[person], 0)] < amount))
     assert short.any()
+
+
+def test_upi_only_when_deposit_covers_amount(tmp_path):
+    from arthasim import Config, World
+    from arthasim.modules.spending import ECOMMERCE_BILLER, ELECTRICITY_BILLER, TELECOM_BILLER
+    world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)), seed=7)
+    s = world.state
+    Budget().monthly(world, dt.date(2025, 4, 1))
+    day = dt.date(2025, 4, 10)
+    dep = s.person_deposit[s.person_deposit >= 0]
+    online_acct = s.biller_deposit[ECOMMERCE_BILLER]
+    bill_accts = s.biller_deposit[[TELECOM_BILLER, ELECTRICITY_BILLER]]
+
+    s.book.balance[dep] = 0
+    it = Consumption().intents(world, day)
+    assert not np.isin(it.rail, [Rail.UPI_P2M, Rail.DEBIT_CARD]).any() and not (it.payee_acct == online_acct).any()
+
+    s.book.balance[dep] = 10**12
+    it = Consumption().intents(world, day)
+    upi = it.rail == Rail.UPI_P2M
+    assert (upi & (it.payee_acct == online_acct)).any() and (upi & np.isin(it.payee_acct, bill_accts)).any()
+    assert (upi & np.isin(it.payee_acct, s.merchant_deposit)).any()
+
+    s.book.balance[dep] = np.random.default_rng(1).integers(0, 2_000_000, dep.size)
+    it = Consumption().intents(world, day)
+    digital = np.isin(it.rail, [Rail.UPI_P2M, Rail.DEBIT_CARD])
+    assert digital.any() and (s.book.balance[it.payer_acct[digital]] >= it.amount[digital]).all()

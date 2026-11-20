@@ -121,11 +121,14 @@ class Consumption(BehaviourModule):
                                ("rail", rail), ("entity", entity), ("index", index)):
                 rows[key].append(np.broadcast_to(np.asarray(value, dtype=np.int64), person.shape))
 
-        def rail_for(person, amount, m_upi, m_card, entity, index):
-            # A card is used only when the account covers the amount at the start of the day.
+        def funded(person, amount):
+            """The payer's account covers the amount at the start of the day (UPI and card need this)."""
             dep = s.person_deposit[person]
-            funded = (dep >= 0) & (s.book.balance[np.maximum(dep, 0)] >= amount)
-            return choose_rail(amount, k.person_upi[person], k.person_has_card[person] & funded, m_upi, m_card,
+            return (dep >= 0) & (s.book.balance[np.maximum(dep, 0)] >= amount)
+
+        def rail_for(person, amount, m_upi, m_card, entity, index):
+            ok = funded(person, amount)
+            return choose_rail(amount, k.person_upi[person] & ok, k.person_has_card[person] & ok, m_upi, m_card,
                                rng.uniform(seed, S("cons.upi"), entity, d, index),
                                rng.uniform(seed, S("cons.card"), entity, d, index), params)
 
@@ -141,8 +144,8 @@ class Consumption(BehaviourModule):
                                                  * np.exp(sigma * z - sigma ** 2 / 2))).astype(np.int64)
                 online = np.zeros(person.size, dtype=bool)
                 if cat in ONLINE_CATEGORIES:
-                    online = k.person_upi[person] & (rng.uniform(seed, S("cons.online"), entity, d, i)
-                                                     < params.get("consumption.online_share"))
+                    online = (k.person_upi[person] & funded(person, amount)
+                              & (rng.uniform(seed, S("cons.online"), entity, d, i) < params.get("consumption.online_share")))
                 if online.any():
                     p_on = person[online]
                     add(p_on, Purpose.GROCERY + cat, amount[online], ECOMMERCE_BILLER, True,
