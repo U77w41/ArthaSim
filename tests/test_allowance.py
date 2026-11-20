@@ -146,3 +146,20 @@ def test_cash_payer_withdraws_shortfall_first():
             expected[(q, d)] = -(-short // 10_000) * 10_000
     assert dict(zip(zip(payer[wd].tolist(), day[wd].tolist()), it.amount[wd].tolist())) == expected
     assert len(expected) == int(wd.sum()) and (it.slot[wd] == 48).all() and (it.offset_s[wd] == 0).all()
+
+
+from arthasim import Config, World
+
+
+def test_world_runs_allowance(tmp_path):
+    world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)), seed=7)
+    assert [m.name for m in world.modules] == ["income", "remittances", "budget", "allowance", "consumption", "cash"]
+    run = world.run(until="2025-05-31")       # every invariant is checked daily
+    rows = run.sql("""
+        select pa.household_id as payer_hh, pb.household_id as payee_hh, y.status
+        from payments y
+        join accounts a on a.account_id = y.payer_account_id join persons pa on pa.entity_id = a.holder_entity_id
+        join accounts b on b.account_id = y.payee_account_id join persons pb on pb.entity_id = b.holder_entity_id
+        where y.purpose = 'ALLOWANCE'""")
+    assert rows.height > 0 and (rows["payer_hh"] == rows["payee_hh"]).all()
+    assert (rows["status"] == "SUCCESS").mean() > 0.9

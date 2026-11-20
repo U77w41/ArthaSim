@@ -11,5 +11,5 @@ def test_plan_1b1_gate(tmp_path):
     assert a["days"] == 90 and a["content_hash"] == b["content_hash"]
     purposes = set(runs[0].table("payments").select(pl.col("purpose").unique()).collect()["purpose"])
     assert "UNSPECIFIED" not in purposes
-    assert {"SALARY", "EARNINGS", "PENSION", "REMITTANCE", "GROCERY", "FOOD", "FUEL", "PHARMACY", "APPAREL",
+    assert {"SALARY", "EARNINGS", "PENSION", "REMITTANCE", "ALLOWANCE", "GROCERY", "FOOD", "FUEL", "PHARMACY", "APPAREL",
             "ELECTRONICS", "TRANSPORT", "SERVICES", "OTHER", "UTILITIES", "TELECOM", "MEDICAL"} <= purposes

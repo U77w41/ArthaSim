@@ -14,6 +14,7 @@ import polars as pl
 from arthasim.build.world import EntityKind, WorldState, build_state
 from arthasim.config import Config
 from arthasim.engine.scheduler import Counters, run_day
+from arthasim.modules.allowance import Allowance
 from arthasim.modules.base import BehaviourModule
 from arthasim.modules.budget import Budget
 from arthasim.modules.cash import CashManagement
@@ -107,7 +108,7 @@ class World:
         self._date = config.start
         self.counters = Counters()
         self.modules: list[BehaviourModule] = (
-            [Income(), Remittances(), Budget(), Consumption(), CashManagement()] if state.population is not None
+            [Income(), Remittances(), Budget(), Allowance(), Consumption(), CashManagement()] if state.population is not None
             else [SpikeIncome(), SpikeConsumption()])
         self._store = Store(path)
         self._days = 0
