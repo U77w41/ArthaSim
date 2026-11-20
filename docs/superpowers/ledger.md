@@ -127,3 +127,13 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-allowance-margin.md`. Spec: `d
   - it did not name the period or the denominator of each row.
 - Deferred minors: `--set` errors on a missing `=` or an unparsed `1e-1`; a test uses an import placed below it.
 - Rulings on items the reviewer set aside: padding earners' need follows the approved design and goes to the project owner as a decision; run manifests do not record parameter overrides (predates this branch); no range check on the margin (no parameter has one); the margin pads the head's bills too (per design).
+
+# Margin from leftover surplus execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-20-arthasim-margin-from-leftover.md`. Spec: the revised design in `docs/superpowers/specs/2026-11-20-allowance-margin-design.md`.
+
+- Task 1 (two-stage pooling): red (import error); the Hypothesis property test found an overflow warning at a margin of 5e-324, fixed by dividing only where the result is below 1; green 20 passed; whole suite 122 passed.
+- Ruling: the pair amount keeps the earlier order of operations, `(shortfall * scale + margin request * margin scale) * surplus / total surplus`. That keeps a margin of 0 bit-identical to earlier runs — cost if wrong: none.
+- Ruling: the import placed below its first use in `tests/test_allowance.py` moved to the top, since those import lines were being rewritten anyway (a deferred minor) — cost if wrong: none.
+- Task 2 (sweep): slow gates 3 passed in 62 s; the margin-0 run's content hash equals both earlier runs; at 0.15, funds declines are 4.93% and households scaled down stay at 4.0%.
+- Finding: 249 recipients (0.9%) receive less across runs at 0 and 0.15. In 247 of them the payment failed for the payer's funds; in 2 the amount was smaller because the budget moved. The deferred minors from the first margin review stand, except the import, now fixed.

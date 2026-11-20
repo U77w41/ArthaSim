@@ -152,6 +152,7 @@ def _money_flow_summary(world, run) -> dict:
         "declined_funds_no_income_households": round(float(no_income["share"][0] or 0.0), 4),
         "recipient_declined_by_days_since_allowance": {k: round(v, 4) for k, v in by_days.iter_rows()},
         "allowance_scaled_households": _scaled_households(world),
+        "allowance_margin_short_households": _margin_short_households(world),
         "cash_held_rupees_at_end": {
             "persons": held(s.person_cash), "merchants": held(s.merchant_cash), "billers": held(s.biller_cash),
             "bank_vaults": held(s.bank_vault), "boundary": held([s.boundary_cash]),
@@ -168,6 +169,22 @@ def _scaled_households(world) -> float:
     hh, income = pop.households.household_of_person, pop.attributes.monthly_income_paise
     need = allowance_need(world)
     scale = household_scale(hh, income, need)
+    n = scale.size
+    short = np.bincount(hh, weights=np.maximum(0.0, need - income), minlength=n) > 0
+    surplus = np.bincount(hh, weights=np.maximum(0.0, income - need), minlength=n) > 0
+    both = short & surplus
+    return round(float((scale[both] < 1).mean()), 4) if both.any() else 0.0
+
+
+def _margin_short_households(world) -> float:
+    """Of households with both surplus and a recipient in the last simulated month, the share whose
+    leftover surplus cannot pay every recipient's full margin."""
+    from arthasim.modules.allowance import allowance_need, margin_scale
+
+    pop = world.state.population
+    hh, income = pop.households.household_of_person, pop.attributes.monthly_income_paise
+    need = allowance_need(world)
+    scale = margin_scale(hh, income, need, world.params.get("transfer.allowance_margin"))
     n = scale.size
     short = np.bincount(hh, weights=np.maximum(0.0, need - income), minlength=n) > 0
     surplus = np.bincount(hh, weights=np.maximum(0.0, income - need), minlength=n) > 0
