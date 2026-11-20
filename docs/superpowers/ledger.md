@@ -148,3 +148,10 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-margin-from-leftover.md`. Spec
   - the margin-short row includes stage-1 scaled households;
   - the `allowance_pairs` docstring describes only stage 1;
   - repeated code in the bench helpers.
+
+# Card only if funded execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-20-arthasim-card-if-funded.md`. Spec: `docs/superpowers/specs/2026-11-20-card-if-funded-design.md`.
+
+- Task 1 (funded card rule): red (card rows with every deposit at zero), green; whole suite 123 passed.
+- Task 2 (measure): bench gains `declined_funds_by_rail`; slow gates 3 passed in 63 s; before (main at c5666ce) and after run with the same bench script. Debit-card funds declines fall from 8.3% to 0.2%, and overall funds declines from 4.93% to 4.79%. Recipients with a card and no UPI: 5.8% to 4.8%.

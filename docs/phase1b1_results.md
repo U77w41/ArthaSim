@@ -160,6 +160,35 @@ The first build padded every adult's need, earners included, before pooling. Tha
 
 Commands: `python scripts/bench.py --tier S --days 90 --seed 7 --out runs --set transfer.allowance_margin=M`. The output includes `recipient_declined_by_days_since_allowance`, `allowance_scaled_households` and `allowance_margin_short_households`.
 
+## Card only if funded (20 November 2026)
+
+Design: `docs/superpowers/specs/2026-11-20-card-if-funded-design.md`. Plan: `docs/superpowers/plans/2026-11-20-arthasim-card-if-funded.md`.
+
+A payer now uses their debit card only when their bank balance at the start of the day covers the purchase; otherwise they pay cash. UPI, bills and the allowance are unchanged. Same gate run and machine as above (margin 0.15), before and after, with the same bench script.
+
+| | Before | After |
+| :--- | ---: | ---: |
+| Declined for funds, all attempts | 4.93% | 4.79% |
+| Debit-card attempts declined for funds | 8.3% | 0.2% |
+| Cash attempts declined for funds | 4.7% | 4.8% |
+| UPI_P2M attempts declined for funds | 7.5% | 7.5% |
+| Debit card, share of attempts | 2.8% | 2.5% |
+| Cash, share of attempts | 64.2% | 64.5% |
+| Homemakers / students / job seekers declined | 14.1% / 17.9% / 18.8% | 13.5% / 17.5% / 18.4% |
+| Recipients, 0 to 9 days after their allowance | 2.7% | 2.0% |
+
+Allowance recipients with a card and no UPI, over the 90 days:
+
+| | Before | After |
+| :--- | ---: | ---: |
+| All their attempts declined for funds | 5.8% | 4.8% |
+| Card: share of their attempts, declined | 8.0%, 15.7% | 6.7%, 0.3% |
+| Cash: share of their attempts, declined | 92.0%, 4.9% | 93.3%, 5.2% |
+
+- Card declines for funds nearly vanish. The few left are payers who make two card purchases on one day, each checked against the morning balance.
+- A tenth of card purchases move to cash. Some of those fail there, so cash declines rise slightly. The overall rate still falls, from 4.93% to 4.79%.
+- UPI is untouched and is now the rail with the highest funds-decline rate (7.5%). The same rule could apply to UPI, but that is outside this change.
+
 ## Exit criteria
 
 | Criterion | Result | Evidence |

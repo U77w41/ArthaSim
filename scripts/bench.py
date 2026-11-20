@@ -149,6 +149,9 @@ def _money_flow_summary(world, run) -> dict:
         "purpose_group_share": groups,
         "spend_to_income_median_by_month": {mo: round(r, 3) for mo, r, _ in ratio.iter_rows()},
         "declined_funds_by_life_stage": {k: round(v, 4) for k, v in by_stage.iter_rows()},
+        "declined_funds_by_rail": {k: round(float(v), 4) for k, v in run.sql(
+            "select rail, avg(case when status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) from payments "
+            "group by 1 order by 1").iter_rows()},
         "declined_funds_no_income_households": round(float(no_income["share"][0] or 0.0), 4),
         "recipient_declined_by_days_since_allowance": {k: round(v, 4) for k, v in by_days.iter_rows()},
         "allowance_scaled_households": _scaled_households(world),
