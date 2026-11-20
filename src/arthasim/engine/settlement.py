@@ -123,8 +123,12 @@ def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.
     """Settle sorted intents in order. Mutates `balance` in place.
 
     `withdraw_rail` gives, per cash account, the rail of an automatic withdrawal (ATM when omitted).
-    An automatic withdrawal takes `withdrawal_paise`, or enough for a large purchase rounded up to
-    `withdrawal_note`, capped at the deposit balance rounded down to `withdrawal_note`."""
+    A cash payment larger than the payer's cash first triggers an automatic withdrawal from their deposit:
+    `withdrawal_paise`, or the shortfall rounded up to `withdrawal_note` if that is more, capped at the
+    deposit balance rounded down to `withdrawal_note`. It goes ahead only if it covers the shortfall and
+    the bank's vault holds all of it; otherwise nothing is withdrawn and the payment fails for funds."""
+    if withdrawal_note < 1:
+        raise ValueError(f"withdrawal_note must be at least 1 paisa, got {withdrawal_note}")
     n = len(intents)
     if withdraw_rail is None:
         withdraw_rail = np.full(balance.shape[0], int(Rail.ATM), dtype=np.int64)

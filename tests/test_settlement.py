@@ -74,6 +74,13 @@ def test_withdrawal_rounds_to_notes():
     assert s.payments["amount"].tolist() == [3500, 3450] and bal.tolist() == [5500, 0, 0, 50, 5500, 3450]
 
 
+def test_withdrawal_note_must_be_positive():
+    cash = (Kind.CASH_PAYMENT, FlowType.CONSUMPTION, 3, 5, 500, Rail.CASH, 10, 0)
+    for note in (0, -100):
+        with pytest.raises(ValueError, match="withdrawal_note"):
+            run([5000, 0, 0, 100, 9000, 0], [cash], note=note)
+
+
 def test_rejects_bad_intents():
     for row in (pay(0, 1, 0, 1), pay(0, 1, -5, 1), pay(0, 1, 5, 96), pay(0, 1, 5, 1, off=900)):
         with pytest.raises(ValueError):

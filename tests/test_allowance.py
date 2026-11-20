@@ -227,3 +227,14 @@ def test_margin_never_lowers_an_allowance(people, margin):
     p, r, a = allowance_pairs(hh, income, need, margin)
     padded = dict(zip(zip(p.tolist(), r.tolist()), a.tolist()))
     assert all(padded.get(pair, 0) >= amount for pair, amount in plain.items())
+
+
+def test_cash_allowance_withdrawals_use_the_registry_note(tmp_path):
+    world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)).with_params(
+        **{"cash.withdrawal_note_paise": 50_000}), seed=7)
+    Budget().monthly(world, dt.date(2025, 4, 1))
+    mod = Allowance()
+    mod.monthly(world, dt.date(2025, 4, 1))
+    it = Intents.concat([mod.intents(world, dt.date(2025, 4, d)) for d in range(1, 31)])
+    wd = it.kind == Kind.CASH_WITHDRAWAL
+    assert wd.any() and (it.amount[wd] % 50_000 == 0).all()

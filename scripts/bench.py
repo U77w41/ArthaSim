@@ -18,17 +18,32 @@ import yaml
 from arthasim import Config, World
 
 
+def parse_set(text: str) -> tuple[str, object]:
+    """`KEY=VALUE` for `--set`; the value is read as YAML, and a number in a form YAML keeps as text
+    (such as 1e-1) becomes a float."""
+    if "=" not in text:
+        raise argparse.ArgumentTypeError(f"--set needs KEY=VALUE, got {text!r}")
+    key, raw = text.split("=", 1)
+    value = yaml.safe_load(raw)
+    if isinstance(value, str):
+        try:
+            value = float(value)
+        except ValueError:
+            pass
+    return key, value
+
+
 def main(argv: list[str] | None = None) -> dict:
     ap = argparse.ArgumentParser()
     ap.add_argument("--tier", default="XS")
     ap.add_argument("--days", type=int, default=90)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default="runs")
-    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE",
+    ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", type=parse_set,
                     help="override a registry parameter; repeatable")
     args = ap.parse_args(argv)
 
-    overrides = {k: yaml.safe_load(v) for k, v in (s.split("=", 1) for s in args.set)}
+    overrides = dict(args.set)
     config = Config.tier(args.tier, out_dir=f"{args.out}/bench-{int(time.time())}").with_params(**overrides)
     started = time.perf_counter()
     world = World.build(config, seed=args.seed)
@@ -163,35 +178,36 @@ def _money_flow_summary(world, run) -> dict:
     }
 
 
-def _scaled_households(world) -> float:
-    """Of households with both surplus and shortfall in the last simulated month, the share whose
-    allowances are scaled down because surplus cannot cover every shortfall."""
-    from arthasim.modules.allowance import allowance_need, household_scale
+def _mixed_households(world):
+    """Last simulated month's need, and the households with both surplus and a shortfall."""
+    from arthasim.modules.allowance import allowance_need
 
     pop = world.state.population
     hh, income = pop.households.household_of_person, pop.attributes.monthly_income_paise
     need = allowance_need(world)
-    scale = household_scale(hh, income, need)
-    n = scale.size
+    n = len(pop.households.adults)
     short = np.bincount(hh, weights=np.maximum(0.0, need - income), minlength=n) > 0
     surplus = np.bincount(hh, weights=np.maximum(0.0, income - need), minlength=n) > 0
-    both = short & surplus
+    return hh, income, need, short & surplus
+
+
+def _scaled_households(world) -> float:
+    """Of households with both surplus and shortfall in the last simulated month, the share whose
+    allowances are scaled down because surplus cannot cover every shortfall."""
+    from arthasim.modules.allowance import household_scale
+
+    hh, income, need, both = _mixed_households(world)
+    scale = household_scale(hh, income, need)
     return round(float((scale[both] < 1).mean()), 4) if both.any() else 0.0
 
 
 def _margin_short_households(world) -> float:
     """Of households with both surplus and a recipient in the last simulated month, the share whose
     leftover surplus cannot pay every recipient's full margin."""
-    from arthasim.modules.allowance import allowance_need, margin_scale
+    from arthasim.modules.allowance import margin_scale
 
-    pop = world.state.population
-    hh, income = pop.households.household_of_person, pop.attributes.monthly_income_paise
-    need = allowance_need(world)
+    hh, income, need, both = _mixed_households(world)
     scale = margin_scale(hh, income, need, world.params.get("transfer.allowance_margin"))
-    n = scale.size
-    short = np.bincount(hh, weights=np.maximum(0.0, need - income), minlength=n) > 0
-    surplus = np.bincount(hh, weights=np.maximum(0.0, income - need), minlength=n) > 0
-    both = short & surplus
     return round(float((scale[both] < 1).mean()), 4) if both.any() else 0.0
 
 

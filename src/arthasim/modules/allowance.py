@@ -13,7 +13,6 @@ from arthasim.modules.base import BehaviourModule
 from arthasim.modules.spending import UTILITIES
 
 _EMPTY = np.empty(0, dtype=np.int64)
-_NOTE = 10_000                     # withdrawals are rounded up to whole hundreds of rupees
 
 
 def person_need(person_budget: np.ndarray, budget: np.ndarray, medical_due: np.ndarray, head: np.ndarray,
@@ -48,13 +47,18 @@ def _margin_scale(total_surplus: np.ndarray, total_short: np.ndarray, total_requ
     return np.divide(leftover, total_request, out=np.ones(total_request.size), where=~full)
 
 
+def _margin_request(shortfall: np.ndarray, need, margin: float) -> np.ndarray:
+    """Each recipient's margin request: margin times their need; zero for anyone without a shortfall."""
+    return np.where(shortfall > 0, margin * np.asarray(need, dtype=np.float64), 0.0)
+
+
 def margin_scale(household_of_person: np.ndarray, income: np.ndarray, need: np.ndarray,
                  margin: float) -> np.ndarray:
     """Per household, the share of every recipient's margin that leftover surplus pays: at most 1,
     and 1 with no request."""
     hh = np.asarray(household_of_person, dtype=np.int64)
     shortfall, _, total_surplus, total_short = _balance(hh, income, need)
-    request = np.where(shortfall > 0, margin * np.asarray(need, dtype=np.float64), 0.0)
+    request = _margin_request(shortfall, need, margin)
     return _margin_scale(total_surplus, total_short, np.bincount(hh, weights=request, minlength=total_short.size))
 
 
@@ -67,13 +71,15 @@ def household_scale(household_of_person: np.ndarray, income: np.ndarray, need: n
 def allowance_pairs(household_of_person: np.ndarray, income: np.ndarray, need: np.ndarray,
                     margin: float = 0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(payer, recipient, amount) inside each household. Members with surplus cover members with
-    shortfall, pro rata to surplus; if shortfall exceeds surplus, every shortfall is scaled down alike."""
+    shortfall, pro rata to surplus; if shortfall exceeds surplus, every shortfall is scaled down alike.
+    Surplus left after every shortfall then pays each recipient a margin of `margin` times their need,
+    pro rata to surplus and scaled down alike if the leftover falls short. One payment per pair carries both."""
     hh = np.asarray(household_of_person, dtype=np.int64)
     shortfall, surplus, total_surplus, total_short = _balance(hh, income, need)
     n_h = total_surplus.size
     scale = _scale(total_surplus, total_short)
     # Second stage: surplus left after every shortfall pays each recipient a margin on their need.
-    request = np.where(shortfall > 0, margin * np.asarray(need, dtype=np.float64), 0.0)
+    request = _margin_request(shortfall, need, margin)
     scale2 = _margin_scale(total_surplus, total_short, np.bincount(hh, weights=request, minlength=n_h))
 
     # Pair members by position within their household (households are small).
@@ -164,7 +170,9 @@ class Allowance(BehaviourModule):
                             np.where(cash, s.person_cash[rec], s.person_deposit[rec]),
                             amount, rail, slot, off, np.full(n, int(Purpose.ALLOWANCE)))
 
-        # A banked payer short of cash for today's cash allowances withdraws the shortfall first.
+        # A banked payer short of cash for today's cash allowances withdraws the shortfall first,
+        # rounded up to whole notes.
+        note = int(params.get("cash.withdrawal_note_paise"))
         who, due = np.unique(payer[cash], return_inverse=True)
         total = np.bincount(due, weights=amount[cash], minlength=who.size).astype(np.int64)
         short = total - s.book.balance[s.person_cash[who]]
@@ -174,6 +182,6 @@ class Allowance(BehaviourModule):
         wd_rail = (s.withdraw_rail[s.person_cash[who]] if s.withdraw_rail is not None
                    else np.full(m, int(Rail.ATM)))
         withdrawals = Intents(np.full(m, int(Kind.CASH_WITHDRAWAL)), np.full(m, int(FlowType.CASH_CONVERSION)),
-                              s.person_deposit[who], s.person_cash[who], -(-short // _NOTE) * _NOTE, wd_rail,
+                              s.person_deposit[who], s.person_cash[who], -(-short // note) * note, wd_rail,
                               np.full(m, 48), np.zeros(m), np.full(m, int(Purpose.CASH_WITHDRAWAL)))
         return Intents.concat([withdrawals, transfers])
