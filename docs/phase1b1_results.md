@@ -185,7 +185,7 @@ Allowance recipients with a card and no UPI, over the 90 days:
 | Card: share of their attempts, declined | 8.0%, 15.7% | 6.7%, 0.3% |
 | Cash: share of their attempts, declined | 92.0%, 4.9% | 93.3%, 5.2% |
 
-- Card declines for funds nearly vanish. The few left are payers who make two card purchases on one day, each checked against the morning balance.
+- Card declines for funds nearly vanish. The 663 left come from other debits earlier the same day, because the check uses the morning balance. Before each failed card payment, the same account had made an earlier card purchase that day in 349 cases, UPI purchases in 248, a cash withdrawal in 64, and a bank transfer in 2.
 - A tenth of card purchases move to cash. Some of those fail there, so cash declines rise slightly. The overall rate still falls, from 4.93% to 4.79%.
 - UPI is untouched and is now the rail with the highest funds-decline rate (7.5%). The same rule could apply to UPI, but that is outside this change.
 

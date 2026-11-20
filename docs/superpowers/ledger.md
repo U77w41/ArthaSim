@@ -155,3 +155,12 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-card-if-funded.md`. Spec: `doc
 
 - Task 1 (funded card rule): red (card rows with every deposit at zero), green; whole suite 123 passed.
 - Task 2 (measure): bench gains `declined_funds_by_rail`; slow gates 3 passed in 63 s; before (main at c5666ce) and after run with the same bench script. Debit-card funds declines fall from 8.3% to 0.2%, and overall funds declines from 4.93% to 4.79%. Recipients with a card and no UPI: 5.8% to 4.8%.
+
+## Final review (card only if funded)
+
+- A fresh reviewer found the code correct and every figure reproducible: start-of-day balance confirmed in the scheduler, and UPI counts identical before and after. One important finding: the results put all remaining card declines down to a second card purchase. The 663 left follow an earlier same-day card purchase in 349 cases, UPI purchases in 248, a cash withdrawal in 64 and a bank transfer in 2. This was re-queried and fixed.
+- Deferred minors:
+  - one test assertion cannot fail without the rule, and UPI-gating or `>` mutants pass the test file;
+  - "a tenth" of card purchases moving to cash is 8.7%, and about a third of those fail in cash;
+  - the new bench key is not named in the results.
+- Noted, out of scope: medical bills paid in cash fail about 66% of the time, before and after this change.
