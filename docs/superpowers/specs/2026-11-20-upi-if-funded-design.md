@@ -8,7 +8,7 @@ After the card change, UPI_P2M is the rail with the highest funds-decline rate (
 
 ## Design
 
-- In `Consumption`, UPI at a merchant or biller requires the deposit balance at the start of the day to cover the amount, as cards now do. An unfunded UPI choice falls through to card (if funded and accepted) and then to cash, exactly as `choose_rail` already orders them. Bills (UPI-only billers) fall back to cash at the biller.
+- In `Consumption`, UPI at a merchant or biller requires the deposit balance at the start of the day to cover the amount, as cards now do. An unfunded UPI choice falls through `choose_rail`'s usual order. The same balance check gates cards, so it ends in cash. Bills (UPI-only billers) fall back to cash at the biller.
 - Online orders (UPI only) also require funding. An unfunded online order becomes an offline purchase at a merchant in the same category, using the existing merchant draws. This is a builder's call: an online order cannot be paid in cash.
 - `choose_rail` keeps its signature and draws. Person-to-person UPI (allowances, remittances, earnings) is unchanged.
 

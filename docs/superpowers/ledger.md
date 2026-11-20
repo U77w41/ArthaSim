@@ -171,4 +171,15 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-upi-if-funded.md`. Spec: `docs
 
 - Task 1 (funded UPI rule): red (UPI rows with every deposit at zero), green; the card check became a shared `funded(person, amount)` helper for UPI, card and online orders; whole suite 124 passed.
 - Task 2 (measure): slow gates 3 passed in 66 s; bench compared with the card-only run.
-- Result: UPI funds declines fall from 7.5% to 0.3%, and overall funds declines from 4.79% to 4.35%. Two thirds of the purchases that moved to cash fail there.
+- Result: UPI funds declines fall from 7.5% to 0.3%, and overall funds declines from 4.79% to 4.35%. About 56% of the purchases that moved to cash fail there. About 29,500 cash purchases that used to succeed now fail, because the moved ones spent the cash first.
+
+## Final review (UPI only if funded)
+
+- A fresh reviewer found the code correct. P2P UPI and the random draws are untouched: funded payers' rows are identical, row by row, before and after. Every figure reproduces.
+- Fixed:
+  - the results said two thirds of moved purchases fail in cash. Re-queried: about 56%, plus about 29,500 cash purchases that used to succeed now fail;
+  - the results and the design said an unfunded payer might move to card. The same check gates cards, so none do (re-graded from minor, as a false statement).
+- Deferred minors:
+  - no test pins that an unfunded online order becomes a shop purchase rather than disappearing;
+  - online orders fall 8.8% (123,041 to 112,165), which the results do not mention;
+  - P2P UPI funds declines rise from 0.46% to 0.52% through extra withdrawals, although the rule leaves P2P alone.

@@ -193,7 +193,7 @@ Allowance recipients with a card and no UPI, over the 90 days:
 
 Design: `docs/superpowers/specs/2026-11-20-upi-if-funded-design.md`. Plan: `docs/superpowers/plans/2026-11-20-arthasim-upi-if-funded.md`.
 
-UPI at merchants, at billers and online now follows the card rule. A payer uses it only when their bank balance at the start of the day covers the amount. Otherwise they pay by card (if funded) or cash, and an online order becomes a purchase at a shop. Person-to-person UPI is unchanged. Same gate run (margin 0.15, cards already gated), before and after.
+UPI at merchants, at billers and online now follows the card rule. A payer uses it only when their bank balance at the start of the day covers the amount. Otherwise they pay cash, and an online order becomes a cash purchase at a shop. No purchase moves to card, because the same balance check gates cards. Person-to-person UPI is unchanged. Same gate run (margin 0.15, cards already gated), before and after.
 
 | | Before | After |
 | :--- | ---: | ---: |
@@ -207,7 +207,9 @@ UPI at merchants, at billers and online now follows the card rule. A payer uses 
 | Recipients, 0 to 9 days after their allowance | 2.0% | 1.3% |
 
 - 274,204 purchases (8% of UPI_P2M attempts) move from UPI to cash. UPI funds declines fall by 250,567.
-- Cash funds declines rise by 183,509, two thirds of the purchases that moved. Most payers whose account is short hold too little cash as well. 91% of failed cash payments are under ₹2,000. An account too low to cover such a purchase cannot cover the fixed ₹2,000 automatic withdrawal either.
+- Cash funds declines rise by 183,509. This was found by matching purchases across the two runs on payer, time and purpose; some keys repeat, so the figures are approximate.
+  - About 56% of the purchases that moved fail in cash (about 154,000). Most payers whose account is short hold too little cash as well.
+  - The other ~29,500 are purchases paid in cash in both runs. They used to succeed and now fail, because the moved purchases spent the cash first. This is about 10,000 a month. 91% of failed cash payments are under ₹2,000. An account too low to cover such a purchase cannot cover the fixed ₹2,000 automatic withdrawal either.
 - The net effect is 66,829 fewer funds declines over the 90 days.
 - UPI's share of attempts falls by 1.8 points. If plan 1e calibrates the rail mix against real UPI shares, it must count this rule.
 
