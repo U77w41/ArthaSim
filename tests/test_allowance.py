@@ -1,7 +1,7 @@
 import numpy as np
 from arthasim.engine.intents import Purpose
 from arthasim.ledger.journal import FlowType
-from arthasim.modules.allowance import allowance_pairs, person_need
+from arthasim.modules.allowance import allowance_need, allowance_pairs, household_scale, margin_scale, person_need
 
 
 def test_enum_values():
@@ -86,7 +86,8 @@ def test_month_pays_every_pair_once_inside_households():
     it.validate()
     h = B.households
     need = allowance_need(W)
-    p, r, a = allowance_pairs(h.household_of_person, B.attributes.monthly_income_paise, need)
+    p, r, a = allowance_pairs(h.household_of_person, B.attributes.monthly_income_paise, need,
+                              P.get("transfer.allowance_margin"))
     owner = _owner()
     got = sorted(zip(owner[it.payer_acct].tolist(), owner[it.payee_acct].tolist(), it.amount.tolist()))
     assert len(got) > 0 and got == sorted(zip(p.tolist(), r.tolist(), a.tolist()))
@@ -163,7 +164,7 @@ def test_world_runs_allowance(tmp_path):
 
 
 import polars as pl
-from arthasim.modules.allowance import allowance_need, household_scale
+from hypothesis import given, settings, strategies as st
 
 
 def test_margin_parameter():
@@ -178,16 +179,51 @@ def test_household_scale():
 
 
 def test_nobody_gives_and_receives():
-    # Income 105 against need 100 padded by 15%: a recipient of 10, not a payer of 5.
-    p, r, a = allowance_pairs(np.array([0, 0]), np.array([1_000, 105]), np.array([100.0, 100.0]) * 1.15)
-    assert list(zip(p.tolist(), r.tolist(), a.tolist())) == [(0, 1, 10)]
+    # Income 105 against need 100: a payer of a little, never a recipient of the margin.
+    p, r, a = allowance_pairs(np.array([0, 0, 0]), np.array([1_000, 105, 0]), np.array([100.0, 100.0, 100.0]), 0.15)
+    assert set(r.tolist()) == {2} and a.sum() == 115 and 1 in p.tolist()
 
 
-def test_allowance_need_applies_margin():
+def test_allowance_need_is_unpadded():
     Budget().monthly(W, dt.date(2025, 4, 1))
     beh, h = S.behaviour, B.households
     kinds = np.array([d.kind for d in B.districts])
     u = np.where(kinds[B.persons.district] == "metro", P.get("consumption.category_shares.metro")[9],
                  P.get("consumption.category_shares.rural")[9])
     plain = person_need(beh.person_budget, beh.budget, beh.medical_due, h.head, u)
-    assert np.allclose(allowance_need(W), plain * 1.15)
+    assert np.allclose(allowance_need(W), plain)
+
+
+def test_margin_paid_from_leftover():
+    # Surplus 60,000 covers shortfalls of 40,000 and 10,000; the 10,000 left pays 10/12 of two 6,000 margins.
+    p, r, a = allowance_pairs(np.array([0, 0, 0]), np.array([100_000, 0, 30_000]),
+                              np.array([40_000.0, 40_000.0, 40_000.0]), 0.15)
+    assert list(zip(p.tolist(), r.tolist(), a.tolist())) == [(0, 1, 45_000), (0, 2, 15_000)]
+
+
+def test_stretched_household_gets_no_margin():
+    args = (np.array([0, 0, 0, 0]), np.array([30_000, 10_000, 0, 0]), np.array([20_000.0, 5_000.0, 20_000.0, 10_000.0]))
+    plain, padded = allowance_pairs(*args), allowance_pairs(*args, 0.15)
+    assert all((x == y).all() for x, y in zip(plain, padded))
+    assert list(zip(*(x.tolist() for x in padded))) == [(0, 2, 6_667), (0, 3, 3_333), (1, 2, 3_333), (1, 3, 1_667)]
+
+
+def test_margin_scale():
+    scale = margin_scale(np.array([0, 0, 0, 1]), np.array([100_000, 0, 30_000, 50_000]),
+                         np.array([40_000.0, 40_000.0, 40_000.0, 10_000.0]), 0.15)
+    assert np.allclose(scale, [10 / 12, 1.0])
+
+
+@settings(max_examples=300, deadline=None)
+@given(st.lists(st.tuples(st.integers(0, 4), st.integers(0, 200_000), st.integers(1_000, 100_000)),
+                min_size=1, max_size=15),
+       st.floats(0.0, 0.5))
+def test_margin_never_lowers_an_allowance(people, margin):
+    hh = np.array([x[0] for x in people])
+    income = np.array([x[1] for x in people])
+    need = np.array([x[2] for x in people], dtype=np.float64)
+    plain = dict(zip(zip(*(x.tolist() for x in allowance_pairs(hh, income, need)[:2])),
+                     allowance_pairs(hh, income, need)[2].tolist()))
+    p, r, a = allowance_pairs(hh, income, need, margin)
+    padded = dict(zip(zip(p.tolist(), r.tolist()), a.tolist()))
+    assert all(padded.get(pair, 0) >= amount for pair, amount in plain.items())
