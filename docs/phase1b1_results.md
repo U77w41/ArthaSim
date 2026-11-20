@@ -136,13 +136,17 @@ Earners first cover every shortfall exactly as before. Whatever surplus is left 
 | Households scaled down (June) | 4.0% | 4.0% | 4.0% | 4.0% |
 | Households that cannot pay the full margin (June) | 0% | 14.8% | 16.8% | 19.0% |
 | Share of funds declines from households with no income | 32.9% | 35.0% | 35.7% | 36.2% |
+| Allowances declined for the payer's funds | 2.1% | 2.4% | 2.6% | 2.7% |
+| Allowances paid over the 90 days | ₹142 crore | ₹160 crore | ₹169 crore | ₹177 crore |
 
 Rows cover all 90 days, except the two household rows, which are June.
 - "Recipients" are homemakers, students and job seekers, counted from the last allowance they received.
 - The household rows count households with both surplus and a shortfall, not all households.
 - "Scaled down" means earners cannot cover every shortfall in full. It no longer depends on the margin.
 
-- At 0.15, funds declines fall from 5.36% to 4.93%, and late-cycle declines (25 to 29 days) from 19% to 11.6%. The overall rate moves less because the margin changes only what recipients receive, and their payments are about a fifth of all attempts.
+- At 0.15, funds declines fall from 5.36% to 4.93%, and late-cycle declines (25 to 29 days) from 19% to 11.6%. The overall rate moves less for two reasons:
+  - Homemakers, students and job seekers make only about a quarter of all payment attempts.
+  - The margin costs payers something. Allowances failing for the payer's funds rise from 2.1% to 2.6%, and payers' own purchases fail 1.30% of the time, against 1.27%.
 - Recipients who receive less, comparing each one's May and June allowances across the runs at 0 and 0.15:
   - 249 of 26,665 (0.9%) receive less.
   - In 247 of these, the amount set was at least as large, but more of the payments failed because the payer was short that day.

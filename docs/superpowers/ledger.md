@@ -137,3 +137,14 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-margin-from-leftover.md`. Spec
 - Ruling: the import placed below its first use in `tests/test_allowance.py` moved to the top, since those import lines were being rewritten anyway (a deferred minor) — cost if wrong: none.
 - Task 2 (sweep): slow gates 3 passed in 62 s; the margin-0 run's content hash equals both earlier runs; at 0.15, funds declines are 4.93% and households scaled down stay at 4.0%.
 - Finding: 249 recipients (0.9%) receive less across runs at 0 and 0.15. In 247 of them the payment failed for the payer's funds; in 2 the amount was smaller because the budget moved. The deferred minors from the first margin review stand, except the import, now fixed.
+
+## Final review (margin from leftover surplus)
+
+- A fresh reviewer read the whole branch and found it ready to merge: no critical or important findings, six minors. Its checks: 20,000 random households with zero violations; margin 0 bit-identical across three runs; every table figure reproduced.
+- Fixed: one minor re-graded as important, following the precedent that false statements in the results are important. The doc said recipients' payments were "about a fifth" of attempts (a quarter) and that the margin changes "only what recipients receive". It also raises allowance failures for the payer's funds, from 2.1% to 2.6%. Rows added for that and for allowance volume (₹142 to ₹169 crore at 0.15). The reviewer's volume figure was ten times too small; it was recomputed before use.
+- Deferred minors:
+  - the property test does not pin the pro rata split or the per-payer bound;
+  - the 249 figure covers three life stages (all recipients: 337 of 43,945);
+  - the margin-short row includes stage-1 scaled households;
+  - the `allowance_pairs` docstring describes only stage 1;
+  - repeated code in the bench helpers.
