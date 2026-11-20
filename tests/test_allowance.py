@@ -84,11 +84,8 @@ def test_no_monthly_no_intents():
 def test_month_pays_every_pair_once_inside_households():
     it, _ = _month(2025, 4)
     it.validate()
-    beh, h = S.behaviour, B.households
-    kinds = np.array([d.kind for d in B.districts])
-    u = np.where(kinds[B.persons.district] == "metro", P.get("consumption.category_shares.metro")[9],
-                 P.get("consumption.category_shares.rural")[9])
-    need = person_need(beh.person_budget, beh.budget, beh.medical_due, h.head, u)
+    h = B.households
+    need = allowance_need(W)
     p, r, a = allowance_pairs(h.household_of_person, B.attributes.monthly_income_paise, need)
     owner = _owner()
     got = sorted(zip(owner[it.payer_acct].tolist(), owner[it.payee_acct].tolist(), it.amount.tolist()))
@@ -163,3 +160,34 @@ def test_world_runs_allowance(tmp_path):
         where y.purpose = 'ALLOWANCE'""")
     assert rows.height > 0 and (rows["payer_hh"] == rows["payee_hh"]).all()
     assert (rows["status"] == "SUCCESS").mean() > 0.9
+
+
+import polars as pl
+from arthasim.modules.allowance import allowance_need, household_scale
+
+
+def test_margin_parameter():
+    row = P.table().filter(pl.col("id") == "transfer.allowance_margin")
+    assert row.height == 1 and P.get("transfer.allowance_margin") == 0.15 and row["status"][0] == "assumption"
+
+
+def test_household_scale():
+    scale = household_scale(np.array([0, 0, 1, 1, 2, 3]), np.array([30_000, 0, 10_000, 0, 0, 10_000]),
+                            np.array([10_000.0, 10_000.0, 5_000.0, 10_000.0, 5_000.0, 5_000.0]))
+    assert scale.tolist() == [1.0, 0.5, 0.0, 1.0]
+
+
+def test_nobody_gives_and_receives():
+    # Income 105 against need 100 padded by 15%: a recipient of 10, not a payer of 5.
+    p, r, a = allowance_pairs(np.array([0, 0]), np.array([1_000, 105]), np.array([100.0, 100.0]) * 1.15)
+    assert list(zip(p.tolist(), r.tolist(), a.tolist())) == [(0, 1, 10)]
+
+
+def test_allowance_need_applies_margin():
+    Budget().monthly(W, dt.date(2025, 4, 1))
+    beh, h = S.behaviour, B.households
+    kinds = np.array([d.kind for d in B.districts])
+    u = np.where(kinds[B.persons.district] == "metro", P.get("consumption.category_shares.metro")[9],
+                 P.get("consumption.category_shares.rural")[9])
+    plain = person_need(beh.person_budget, beh.budget, beh.medical_due, h.head, u)
+    assert np.allclose(allowance_need(W), plain * 1.15)

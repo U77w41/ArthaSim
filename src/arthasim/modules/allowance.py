@@ -27,17 +27,34 @@ def person_need(person_budget: np.ndarray, budget: np.ndarray, medical_due: np.n
     return need
 
 
+def _balance(hh: np.ndarray, income, need):
+    """Per person shortfall and surplus, and their totals per household."""
+    income, need = np.asarray(income, dtype=np.float64), np.asarray(need, dtype=np.float64)
+    shortfall, surplus = np.maximum(0.0, need - income), np.maximum(0.0, income - need)
+    n_h = int(hh.max()) + 1 if hh.size else 0
+    return (shortfall, surplus, np.bincount(hh, weights=surplus, minlength=n_h),
+            np.bincount(hh, weights=shortfall, minlength=n_h))
+
+
+def _scale(total_surplus: np.ndarray, total_short: np.ndarray) -> np.ndarray:
+    return np.minimum(1.0, np.divide(total_surplus, total_short, out=np.ones(total_short.size),
+                                     where=total_short > 0))
+
+
+def household_scale(household_of_person: np.ndarray, income: np.ndarray, need: np.ndarray) -> np.ndarray:
+    """Per household, the share of every shortfall that surplus covers: at most 1, and 1 with no shortfall."""
+    _, _, total_surplus, total_short = _balance(np.asarray(household_of_person, dtype=np.int64), income, need)
+    return _scale(total_surplus, total_short)
+
+
 def allowance_pairs(household_of_person: np.ndarray, income: np.ndarray,
                     need: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(payer, recipient, amount) inside each household. Members with surplus cover members with
     shortfall, pro rata to surplus; if shortfall exceeds surplus, every shortfall is scaled down alike."""
     hh = np.asarray(household_of_person, dtype=np.int64)
-    income, need = np.asarray(income, dtype=np.float64), np.asarray(need, dtype=np.float64)
-    shortfall, surplus = np.maximum(0.0, need - income), np.maximum(0.0, income - need)
-    n_h = int(hh.max()) + 1 if hh.size else 0
-    total_surplus = np.bincount(hh, weights=surplus, minlength=n_h)
-    total_short = np.bincount(hh, weights=shortfall, minlength=n_h)
-    scale = np.minimum(1.0, np.divide(total_surplus, total_short, out=np.zeros(n_h), where=total_short > 0))
+    shortfall, surplus, total_surplus, total_short = _balance(hh, income, need)
+    n_h = total_surplus.size
+    scale = _scale(total_surplus, total_short)
 
     # Pair members by position within their household (households are small).
     order = np.argsort(hh, kind="stable")
@@ -69,6 +86,18 @@ def allowance_day(payday: np.ndarray, keyed_day: np.ndarray, days_in_month: int)
     return np.where(payday >= 1, np.minimum(payday + 1, days_in_month), np.asarray(keyed_day, dtype=np.int64))
 
 
+def allowance_need(world) -> np.ndarray:
+    """Each adult's need this month, padded by the allowance margin."""
+    s, params = world.state, world.params
+    pop, beh = s.population, s.behaviour
+    kinds = np.array([d.kind for d in pop.districts])
+    u = np.where(kinds[pop.persons.district] == "metro",
+                 params.get("consumption.category_shares.metro")[UTILITIES],
+                 params.get("consumption.category_shares.rural")[UTILITIES])
+    need = person_need(beh.person_budget, beh.budget, beh.medical_due, pop.households.head, u)
+    return need * (1.0 + params.get("transfer.allowance_margin"))
+
+
 class Allowance(BehaviourModule):
     """Monthly allowances inside households, paid where the recipient spends from."""
 
@@ -78,14 +107,10 @@ class Allowance(BehaviourModule):
         self._pairs: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | None = None
 
     def monthly(self, world, month: dt.date) -> None:
-        s, params, seed = world.state, world.params, world.seed
-        pop, beh, h = s.population, s.behaviour, s.population.households
-        kinds = np.array([d.kind for d in pop.districts])
-        u = np.where(kinds[pop.persons.district] == "metro",
-                     params.get("consumption.category_shares.metro")[UTILITIES],
-                     params.get("consumption.category_shares.rural")[UTILITIES])
-        need = person_need(beh.person_budget, beh.budget, beh.medical_due, h.head, u)
-        payer, recipient, amount = allowance_pairs(h.household_of_person, pop.attributes.monthly_income_paise, need)
+        s, seed = world.state, world.seed
+        pop = s.population
+        payer, recipient, amount = allowance_pairs(pop.households.household_of_person,
+                                                   pop.attributes.monthly_income_paise, allowance_need(world))
         employer = s.person_employer[payer]
         payday = np.full(payer.size, -1, dtype=np.int64)
         payday[employer >= 0] = s.employer_payday[employer[employer >= 0]]
