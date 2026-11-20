@@ -164,3 +164,11 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-card-if-funded.md`. Spec: `doc
   - "a tenth" of card purchases moving to cash is 8.7%, and about a third of those fail in cash;
   - the new bench key is not named in the results.
 - Noted, out of scope: medical bills paid in cash fail about 66% of the time, before and after this change.
+
+# UPI only if funded execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-20-arthasim-upi-if-funded.md`. Spec: `docs/superpowers/specs/2026-11-20-upi-if-funded-design.md`.
+
+- Task 1 (funded UPI rule): red (UPI rows with every deposit at zero), green; the card check became a shared `funded(person, amount)` helper for UPI, card and online orders; whole suite 124 passed.
+- Task 2 (measure): slow gates 3 passed in 66 s; bench compared with the card-only run.
+- Result: UPI funds declines fall from 7.5% to 0.3%, and overall funds declines from 4.79% to 4.35%. Two thirds of the purchases that moved to cash fail there.

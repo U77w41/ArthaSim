@@ -189,6 +189,28 @@ Allowance recipients with a card and no UPI, over the 90 days:
 - A tenth of card purchases move to cash. Some of those fail there, so cash declines rise slightly. The overall rate still falls, from 4.93% to 4.79%.
 - UPI is untouched and is now the rail with the highest funds-decline rate (7.5%). The same rule could apply to UPI, but that is outside this change.
 
+## UPI only if funded (20 November 2026)
+
+Design: `docs/superpowers/specs/2026-11-20-upi-if-funded-design.md`. Plan: `docs/superpowers/plans/2026-11-20-arthasim-upi-if-funded.md`.
+
+UPI at merchants, at billers and online now follows the card rule. A payer uses it only when their bank balance at the start of the day covers the amount. Otherwise they pay by card (if funded) or cash, and an online order becomes a purchase at a shop. Person-to-person UPI is unchanged. Same gate run (margin 0.15, cards already gated), before and after.
+
+| | Before | After |
+| :--- | ---: | ---: |
+| Declined for funds, all attempts | 4.79% | 4.35% |
+| UPI_P2M attempts declined for funds | 7.5% | 0.3% |
+| Cash attempts declined for funds | 4.8% | 6.4% |
+| UPI_P2M, share of attempts | 22.5% | 20.7% |
+| Cash, share of attempts | 64.5% | 66.3% |
+| Homemakers / students / job seekers declined | 13.5% / 17.5% / 18.4% | 12.6% / 16.2% / 17.2% |
+| Casual workers / farm workers declined | 2.1% / 4.1% | 0.7% / 3.6% |
+| Recipients, 0 to 9 days after their allowance | 2.0% | 1.3% |
+
+- 274,204 purchases (8% of UPI_P2M attempts) move from UPI to cash. UPI funds declines fall by 250,567.
+- Cash funds declines rise by 183,509, two thirds of the purchases that moved. Most payers whose account is short hold too little cash as well. The automatic withdrawal cannot help them either, because it needs ₹2,000 in the account.
+- The net effect is 66,829 fewer funds declines over the 90 days.
+- UPI's share of attempts falls by 1.8 points. If plan 1e calibrates the rail mix against real UPI shares, it must count this rule.
+
 ## Exit criteria
 
 | Criterion | Result | Evidence |
