@@ -400,5 +400,7 @@
   source: plan 1b-1 placeholder, status: assumption, role: input}
 - {id: cash.person_keep_paise, value: 500000, unit: '', as_of: 2026-11, source: plan
     1b-1 placeholder, status: assumption, role: input}
+- {id: cash.withdrawal_note_paise, value: 10000, unit: paise, as_of: 2026-11, source: flexible
+    withdrawal placeholder, status: assumption, role: input}
 - {id: cash.person_deposit_daily_prob, value: 0.2, unit: '', as_of: 2026-11, source: plan
     1b-1 placeholder, status: assumption, role: input}

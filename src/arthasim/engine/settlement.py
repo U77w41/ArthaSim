@@ -53,7 +53,7 @@ def _journal(J, n_j, jid, pid, kind, flow, slot, off):
 
 @njit(cache=True)
 def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, flow, payer, payee, amount,
-            rail, slot, off, purpose, upi_limit, tech_u, tech_rate, wd, next_pid, next_jid, P, J, Q):
+            rail, slot, off, purpose, upi_limit, tech_u, tech_rate, wd, note, next_pid, next_jid, P, J, Q):
     n_p = 0
     n_j = 0
     n_q = 0
@@ -69,20 +69,24 @@ def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, f
             elif tech_u[i] < tech_rate:
                 status = _DECLINED_TECH
 
-        # A cash purchase with too little cash first tries a withdrawal (ATM or AePS).
+        # A cash purchase with too little cash first tries a withdrawal (ATM or AePS): the usual amount,
+        # or enough for a large purchase, capped at what the account holds in whole notes.
         if status == _SUCCESS and k == _CASH_PAYMENT and balance[src] < a:
             dep = deposit_for_cash[src]
             if dep >= 0:
                 vault = vault_for_deposit[dep]
-                if vault >= 0 and balance[dep] >= wd and balance[vault] >= wd:
+                need = a - balance[src]
+                take = max(wd, (need + note - 1) // note * note)
+                take = min(take, balance[dep] // note * note)
+                if vault >= 0 and take >= need and balance[vault] >= take:
                     pid = next_pid + n_p
                     jid = next_jid + n_j
-                    n_p = _record(P, n_p, pid, slot[i], off[i], withdraw_rail[src], _SUCCESS, wd, dep, src, jid,
+                    n_p = _record(P, n_p, pid, slot[i], off[i], withdraw_rail[src], _SUCCESS, take, dep, src, jid,
                                   _CASH_WITHDRAWAL, _CASH_CONVERSION, _PURPOSE_WITHDRAWAL)
                     n_j = _journal(J, n_j, jid, pid, _CASH_WITHDRAWAL, _CASH_CONVERSION, slot[i], off[i])
-                    n_q = _post(Q, n_q, balance, jid, 0, dep, -wd)
-                    n_q = _post(Q, n_q, balance, jid, 1, src, wd)
-                    n_q = _post(Q, n_q, balance, jid, 2, vault, -wd)
+                    n_q = _post(Q, n_q, balance, jid, 0, dep, -take)
+                    n_q = _post(Q, n_q, balance, jid, 1, src, take)
+                    n_q = _post(Q, n_q, balance, jid, 2, vault, -take)
 
         vault = -1
         if status == _SUCCESS:
@@ -115,10 +119,12 @@ def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, f
 def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.ndarray,
                vault_for_deposit: np.ndarray, intents: Intents, upi_limit: int, tech_u: np.ndarray,
                tech_rate: float, withdrawal_paise: int, next_payment_id: int, next_journal_id: int,
-               withdraw_rail: np.ndarray | None = None) -> Settled:
+               withdraw_rail: np.ndarray | None = None, withdrawal_note: int = 1) -> Settled:
     """Settle sorted intents in order. Mutates `balance` in place.
 
-    `withdraw_rail` gives, per cash account, the rail of an automatic withdrawal (ATM when omitted)."""
+    `withdraw_rail` gives, per cash account, the rail of an automatic withdrawal (ATM when omitted).
+    An automatic withdrawal takes `withdrawal_paise`, or enough for a large purchase rounded up to
+    `withdrawal_note`, capped at the deposit balance rounded down to `withdrawal_note`."""
     n = len(intents)
     if withdraw_rail is None:
         withdraw_rail = np.full(balance.shape[0], int(Rail.ATM), dtype=np.int64)
@@ -130,7 +136,8 @@ def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.
                             intents.payer_acct, intents.payee_acct, intents.amount, intents.rail, intents.slot,
                             intents.offset_s, intents.purpose, int(upi_limit),
                             np.ascontiguousarray(tech_u, dtype=np.float64), float(tech_rate),
-                            int(withdrawal_paise), int(next_payment_id), int(next_journal_id), P, J, Q)
+                            int(withdrawal_paise), int(withdrawal_note), int(next_payment_id), int(next_journal_id),
+                            P, J, Q)
 
     def cols(arr: np.ndarray, count: int, names: list[str]) -> dict[str, np.ndarray]:
         return {name: arr[:count, i].copy() for i, name in enumerate(names)}

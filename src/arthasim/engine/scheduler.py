@@ -68,7 +68,8 @@ def run_day(world: "World", day: dt.date) -> tuple[pl.DataFrame, pl.DataFrame, p
     s = settle_day(book.balance, book.type, state.deposit_for_cash, state.vault_for_deposit, intents,
                    params.get("rail.upi.limit_paise"), tech_u, params.get("rail.upi.tech_decline_rate"),
                    params.get("spike.cash_withdrawal_paise"), counters.next_payment_id,
-                   counters.next_journal_id, withdraw_rail=getattr(state, "withdraw_rail", None))
+                   counters.next_journal_id, withdraw_rail=getattr(state, "withdraw_rail", None),
+                   withdrawal_note=params.get("cash.withdrawal_note_paise"))
     counters.next_payment_id, counters.next_journal_id = s.next_payment_id, s.next_journal_id
 
     base = day_start_us(day)

@@ -11,13 +11,14 @@ DEP_FOR_CASH = np.array([-1, -1, -1, 0, -1, -1], dtype=np.int64)
 VAULT_FOR_DEP = np.array([4, 4, 4, -1, -1, -1], dtype=np.int64)
 
 
-def run(balance, rows, limit=10_000_000, tech=None, rate=0.0, wd=2000):
+def run(balance, rows, limit=10_000_000, tech=None, rate=0.0, wd=2000, note=1):
     cols = list(zip(*rows))
     it = Intents(*[np.array(c, dtype=np.int64) for c in cols]).sorted()
     it.validate()
     tech_u = np.ones(len(rows)) if tech is None else np.array(tech, dtype=np.float64)
     bal = np.array(balance, dtype=np.int64)
-    return bal, settle_day(bal, TYPE, DEP_FOR_CASH, VAULT_FOR_DEP, it, limit, tech_u, rate, wd, 0, 0)
+    return bal, settle_day(bal, TYPE, DEP_FOR_CASH, VAULT_FOR_DEP, it, limit, tech_u, rate, wd, 0, 0,
+                           withdrawal_note=note)
 
 
 def pay(payer, payee, amt, slot, rail=Rail.UPI_P2M, off=0):
@@ -49,10 +50,28 @@ def test_cash_purchase_triggers_withdrawal():
     assert s.payments["kind"].tolist() == [Kind.CASH_WITHDRAWAL, Kind.CASH_PAYMENT]
     assert s.payments["rail"].tolist() == [Rail.ATM, Rail.CASH]
     assert bal.tolist() == [3000, 0, 0, 1600, 7000, 500]
-    bal, s = run([1000, 0, 0, 100, 9000, 0], [cash])
-    assert s.payments["status"].tolist() == [Status.DECLINED_FUNDS] and bal.tolist() == [1000, 0, 0, 100, 9000, 0]
+    bal, s = run([1000, 0, 0, 100, 9000, 0], [cash])          # less than usual: take what the account holds
+    assert s.payments["kind"].tolist() == [Kind.CASH_WITHDRAWAL, Kind.CASH_PAYMENT]
+    assert s.payments["amount"].tolist() == [1000, 500] and bal.tolist() == [0, 0, 0, 600, 8000, 500]
+    bal, s = run([300, 0, 0, 100, 9000, 0], [cash])           # account cannot cover the shortfall
+    assert s.payments["status"].tolist() == [Status.DECLINED_FUNDS] and bal.tolist() == [300, 0, 0, 100, 9000, 0]
     bal, s = run([5000, 0, 0, 100, 1000, 0], [cash])          # vault too low: no withdrawal
     assert s.payments["status"].tolist() == [Status.DECLINED_FUNDS] and bal.tolist() == [5000, 0, 0, 100, 1000, 0]
+
+
+def test_withdrawal_covers_a_large_purchase():
+    big = (Kind.CASH_PAYMENT, FlowType.CONSUMPTION, 3, 5, 3500, Rail.CASH, 10, 0)
+    bal, s = run([9000, 0, 0, 100, 9000, 0], [big])
+    assert s.payments["amount"].tolist() == [3400, 3500] and bal.tolist() == [5600, 0, 0, 0, 5600, 3500]
+
+
+def test_withdrawal_rounds_to_notes():
+    small = (Kind.CASH_PAYMENT, FlowType.CONSUMPTION, 3, 5, 300, Rail.CASH, 10, 0)
+    bal, s = run([1550, 0, 0, 0, 9000, 0], [small], note=100)
+    assert s.payments["amount"].tolist() == [1500, 300] and bal.tolist() == [50, 0, 0, 1200, 7500, 300]
+    big = (Kind.CASH_PAYMENT, FlowType.CONSUMPTION, 3, 5, 3450, Rail.CASH, 10, 0)
+    bal, s = run([9000, 0, 0, 0, 9000, 0], [big], note=100)
+    assert s.payments["amount"].tolist() == [3500, 3450] and bal.tolist() == [5500, 0, 0, 50, 5500, 3450]
 
 
 def test_rejects_bad_intents():
