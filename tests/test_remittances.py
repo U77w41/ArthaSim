@@ -12,7 +12,8 @@ S, B = W.state, W.state.population
 INC = B.attributes.monthly_income_paise
 EDGES = B.edges.filter(pl.col("type") == 4)
 SRC, DST = EDGES["src"].to_numpy(), EDGES["dst"].to_numpy()
-OK = (S.person_deposit[SRC] >= 0) & (S.person_deposit[DST] >= 0)
+# Unpaid family helpers earn nothing, so they send nothing.
+OK = (S.person_deposit[SRC] >= 0) & (S.person_deposit[DST] >= 0) & (INC[SRC] > 0)
 
 
 def month(mon):

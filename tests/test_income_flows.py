@@ -42,7 +42,8 @@ def test_other_earners_are_paid_the_configured_number_of_times():
         earn = it.flow_type == FlowType.EARNINGS
         count = np.bincount(ACCT_PERSON[it.payee_acct[earn]], minlength=len(INC))
         for stage, f in events.items():
-            assert (count[STAGE == stage] == f).all()
+            assert (count[(STAGE == stage) & (INC > 0)] == f).all()
+        assert (count[np.isin(STAGE, list(events)) & (INC == 0)] == 0).all()     # unpaid family helpers
     for stage in events:
         g = STAGE == stage
         assert abs(GOT[g].sum() / INC[g].sum() - 1.0) < 0.10

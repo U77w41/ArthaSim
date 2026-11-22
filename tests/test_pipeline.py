@@ -3,9 +3,8 @@ from arthasim import Config, World
 
 TRUTH_ONLY = {"domain_skill", "digital_literacy", "financial_literacy", "risk_appetite",
               "habit_strength", "price_sensitivity", "trust_in_offers"}
-PERSON_COLUMNS = ["entity_id", "household_id", "district", "locality", "age", "sex", "education",
-                  "life_stage", "sector", "employer_entity_id", "monthly_income_paise", "has_account",
-                  "primary_bank", "has_pan", "pan_like", "uid_token", "mobile_token"]
+PERSON_COLUMNS = ["entity_id", "household_id", "district", "locality", "sex", "birth_month", "education",
+                  "has_pan", "pan_like", "uid_token", "mobile_token"]
 
 
 def cfg(tmp_path, **kw):
@@ -40,8 +39,7 @@ def test_tables_and_truth_separation(tmp_path):
     persons = run.table("persons").collect()
     assert persons.columns == PERSON_COLUMNS and persons.height == 5_000
     assert not TRUTH_ONLY & set(persons.columns)
-    assert set(persons["life_stage"].unique()) <= {"studying", "seeking", "salaried", "self_employed", "gig",
-                                                    "farm", "casual", "homemaker", "retired"}
+    assert persons["birth_month"].min() >= 1 and persons["birth_month"].max() <= 12
     assert persons.filter(~pl.col("has_pan"))["pan_like"].null_count() == persons.filter(~pl.col("has_pan")).height
     latent = run.table("truth_person_latent").collect()
     assert TRUTH_ONLY <= set(latent.columns) and latent.height == 5_000 and latent["month"].unique().to_list() == ["2025-04"]

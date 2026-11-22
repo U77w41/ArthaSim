@@ -7,7 +7,7 @@ from typing import Sequence
 import numpy as np
 
 from arthasim.build import categories as c
-from arthasim.build.earnings import starting_pay
+from arthasim.build.earnings import income_for
 from arthasim.build.marginals import DistrictMarginals
 from arthasim.build.population import Persons
 from arthasim.engine import rng
@@ -27,6 +27,21 @@ class Attributes:
     trust_in_offers: np.ndarray
     sector: np.ndarray                  # -1 when not earning
     monthly_income_paise: np.ndarray
+
+
+def draw_sector(stage: np.ndarray, is_metro: np.ndarray, u: np.ndarray, params: ParamRegistry) -> np.ndarray:
+    """Sector index (int64): farm is agriculture (0); other earners draw from the district kind's non-farm
+    shares with the uniform draws `u`; everyone else -1."""
+    stage = np.asarray(stage)
+    earning = np.isin(stage, c.EARNING)
+    sector = np.full(stage.shape[0], -1, dtype=np.int64)
+    for kind in ("metro", "rural"):
+        shares = np.asarray(params.get(f"org.sector_shares.{kind}"))[1:]
+        cum = np.cumsum(shares / shares.sum())
+        rows = earning & (np.asarray(is_metro) == (kind == "metro"))
+        sector[rows] = 1 + np.minimum(np.searchsorted(cum, np.asarray(u)[rows], side="right"), len(cum) - 1)
+    sector[stage == c.FARM] = 0
+    return sector
 
 
 def attach_attributes(persons: Persons, districts: Sequence[DistrictMarginals], params: ParamRegistry,
@@ -58,26 +73,8 @@ def attach_attributes(persons: Persons, districts: Sequence[DistrictMarginals], 
     traits = {name: unit((1 - (1 - u(f"attr.{name}")) ** (1 / b)) ** (1 / a))
               for name, (a, b) in params.get("attr.trait_shapes").items()}
 
-    # Sector: farm is agriculture; other earners draw from the district kind's non-farm shares.
-    earning = np.isin(stage, c.EARNING)
-    sector = np.full(n, -1, dtype=np.int64)
-    draw = u("attr.sector")
-    for kind in ("metro", "rural"):
-        shares = np.asarray(params.get(f"org.sector_shares.{kind}"))[1:]
-        cum = np.cumsum(shares / shares.sum())
-        rows = earning & (is_metro == (kind == "metro"))
-        sector[rows] = 1 + np.minimum(np.searchsorted(cum, draw[rows], side="right"), len(cum) - 1)
-    sector[stage == c.FARM] = 0
-
-    z = rng.normal(seed, rng.stream_id("attr.pay"), ids, 0)
-    multiplier = np.zeros(n)
-    for name, value in params.get("earn.stage_multiplier").items():
-        multiplier[stage == c.LIFE_STAGE.index(name)] = value
-    pay = starting_pay(edu, experience, is_metro, np.maximum(sector, 0), z, params) * multiplier
-    pension = params.get("earn.pension_ratio") * starting_pay(
-        edu, experience, is_metro, np.full(n, c.OTHER_SERVICES), np.zeros(n), params)
-    income = np.where(earning, np.maximum(100, np.rint(pay)),
-                      np.where(stage == c.RETIRED, np.maximum(100, np.rint(pension)), 0)).astype(np.int64)
+    sector = draw_sector(stage, is_metro, u("attr.sector"), params)
+    income = income_for(stage, edu, age, is_metro, sector, rng.normal(seed, rng.stream_id("attr.pay"), ids, 0), params)
 
     return Attributes(domain_skill=skill, digital_literacy=digital, financial_literacy=financial,
                       sector=sector.astype(np.int8), monthly_income_paise=income, **traits)

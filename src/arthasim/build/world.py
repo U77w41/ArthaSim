@@ -76,6 +76,8 @@ class WorldState:
     biller_cash: Any = None
     withdraw_rail: Any = None       # per cash account: rail of an automatic withdrawal
     behaviour: Any = None           # BehaviourState
+    life: Any = None                # LifeState (population builds)
+    account_opened_on: Any = None   # per account, datetime64[D] (population builds)
 
 
 def build_state(config: Config, params: ParamRegistry, seed: int) -> WorldState:

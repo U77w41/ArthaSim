@@ -260,14 +260,21 @@ def test_withdrawal_settles_before_the_allowance_it_funds():
     owner = _owner()
     checked = ties = 0
     for d in range(1, 31):
-        it = mod.intents(W, dt.date(2025, 4, d)).sorted()
+        raw = mod.intents(W, dt.date(2025, 4, d))
+        # A tie at the same slot and offset is where the order matters; natural ties are rare, so force one:
+        # the first withdrawing payer's gifts move to the withdrawal's slot and offset.
+        wd = np.flatnonzero(raw.kind == Kind.CASH_WITHDRAWAL)
+        if wd.size:
+            gifts = (owner[raw.payer_acct] == owner[raw.payer_acct[wd[0]]]) & (raw.kind == Kind.CASH_PAYMENT)
+            raw.slot[gifts], raw.offset_s[gifts] = raw.slot[wd[0]], raw.offset_s[wd[0]]
+        it = raw.sorted()
         payer = owner[it.payer_acct]
         for i in np.flatnonzero(it.kind == Kind.CASH_WITHDRAWAL):
             gifts = np.flatnonzero((payer == payer[i]) & (it.kind == Kind.CASH_PAYMENT))
             assert gifts.size and (gifts > i).all()
             checked += 1
             ties += int(((it.slot[gifts] == it.slot[i]) & (it.offset_s[gifts] == it.offset_s[i])).any())
-    assert checked > 0 and ties > 0          # a tie at the same slot and offset is where the order matters
+    assert checked > 0 and ties > 0
 
 
 def test_note_below_one_is_rejected_by_the_allowance(tmp_path):

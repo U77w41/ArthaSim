@@ -22,6 +22,10 @@ from arthasim.config import Config
 from arthasim.engine import rng
 from arthasim.engine.intents import Rail
 from arthasim.ledger.instruments import InstrumentBook, InstrumentType as T
+from arthasim.life.helpers import assign_helpers
+from arthasim.life.sources import load_plfs
+from arthasim.life.state import initial_life_state
+from arthasim.life.targets import Targets
 from arthasim.params import ParamRegistry
 
 LATENT = ("domain_skill", "digital_literacy", "financial_literacy", "risk_appetite", "habit_strength",
@@ -72,9 +76,17 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
     S = rng.stream_id
     L, B = config.localities_per_district, config.banks
     districts = [load_district(name) for name in config.districts]
-    persons = synthesise_persons(districts, load_priors(), config.persons, seed)
+    targets = Targets(load_plfs(), params, [d.kind for d in districts])
+    persons = synthesise_persons(districts, load_priors(), config.persons, seed,
+                                 stage_shares=targets.start_array(config.start))
     households = form_households(persons, districts, L, params, seed)
+    # Unpaid helpers, only inside a family farm or business; they have no income of their own.
+    p_ids = np.arange(len(persons), dtype=np.int64)
+    candidate = rng.uniform(seed, S("life.helper"), p_ids, 0) < targets.helper_share(
+        persons.district, persons.sex, persons.age, persons.life_stage)
+    helper = assign_helpers(persons.life_stage, households.household_of_person, candidate)
     attributes = attach_attributes(persons, districts, params, seed)
+    attributes.monthly_income_paise[helper] = 0
     orgs = build_orgs(persons, attributes, districts, L, params, seed)
     banking = assign_banking(persons, attributes, orgs, districts, config, params, seed)
     edges = build_edges(persons, households, orgs, districts, params, seed)
@@ -160,8 +172,16 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
     initial = np.minimum((rng.uniform(seed, S("id.pan"), person_ids, 0) * 26).astype(np.int64), 25)
     tokens = {"uid": token("u", seed, S("id.uid"), person_ids), "mobile": token("m", seed, S("id.mobile"), person_ids),
               "device": token("d", seed, S("id.device"), person_ids), "card": token("c", seed, S("id.card"), person_ids)}
+    stage_target = np.zeros((len(districts), 2, 9))
+    for di in range(len(districts)):
+        for x in (c.F, c.M):
+            m = (persons.district == di) & (persons.sex == x)
+            if m.any():
+                stage_target[di, x] = targets.for_persons(config.start, di, x, persons.age[m]).mean(axis=0)
+    life = initial_life_state(persons, households, attributes, orgs, targets, params, seed, config.start, helper)
     bundle = PopulationBundle(districts=districts, persons=persons, households=households, attributes=attributes,
-                              orgs=orgs, banking=banking, edges=edges, report=fit_report(districts, persons),
+                              orgs=orgs, banking=banking, edges=edges,
+                              report=fit_report(districts, persons, stage_target),
                               person_second_deposit=person_second, biller_ids=biller_ids, biller_bank=biller_bank,
                               nbfc_ids=nbfc_ids, tokens=tokens)
     return WorldState(
@@ -180,7 +200,8 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
         currency_issued=int(book.balance[book.type == T.CASH].sum()),
         posted_total=np.zeros(n_accounts, dtype=np.int64), start=config.start, population=bundle,
         boundary_cash=int(boundary_cash), biller_deposit=biller_deposit, biller_cash=biller_cash,
-        withdraw_rail=withdraw_rail, behaviour=BehaviourState.zeros(households.adults.size, P))
+        withdraw_rail=withdraw_rail, behaviour=BehaviourState.zeros(households.adults.size, P), life=life,
+        account_opened_on=np.full(n_accounts, np.datetime64(config.start, "D")))
 
 
 def _names(labels: list[str], index: np.ndarray, missing: np.ndarray | None = None) -> pl.Series:
@@ -203,18 +224,13 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
     codes = k.bank_codes.tolist()
     hh = h.household_of_person
     locality = h.locality[hh]
-    banked = k.person_has_account
-    has_job = o.person_employer >= 0
 
+    # Time-varying person state (age, stage, job, income, accounts) is in entity_state_monthly.
     persons = pl.DataFrame({
         "entity_id": state.person_ids, "household_id": hh, "district": _names(district_ids, p.district),
-        "locality": locality, "age": p.age, "sex": _names(c.SEX, p.sex),
-        "education": _names(c.EDUCATION, p.education), "life_stage": _names(c.LIFE_STAGE, p.life_stage),
-        "sector": _names(c.SECTORS, a.sector.astype(np.int64)),
-        "employer_entity_id": _nullable(state.employer_ids[np.maximum(o.person_employer, 0)] if len(state.employer_ids)
-                                        else np.zeros(len(p), dtype=np.int64), has_job, pl.Int64),
-        "monthly_income_paise": a.monthly_income_paise, "has_account": banked,
-        "primary_bank": _names(codes, k.person_primary_bank), "has_pan": k.person_has_pan,
+        "locality": locality, "sex": _names(c.SEX, p.sex),
+        "birth_month": pl.Series(state.life.birth_month.astype(np.int64), dtype=pl.Int64),
+        "education": _names(c.EDUCATION, p.education), "has_pan": k.person_has_pan,
         "pan_like": _nullable(state.pan_like, k.person_has_pan, pl.String),
         "uid_token": pl.Series(b.tokens["uid"].tolist(), dtype=pl.String),
         "mobile_token": _nullable(b.tokens["mobile"], k.person_has_mobile, pl.String)})
@@ -251,6 +267,29 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
         "archetype": k.bank_archetype.tolist() + [None] + ["nbfc"] * len(b.nbfc_ids)},
         schema={"entity_id": pl.Int64, "bank_code": pl.String, "kind": pl.String, "archetype": pl.String})
 
+    frames = account_frames(state, config)
+
+    edges = b.edges.rename({"src": "src_entity_id", "dst": "dst_entity_id"})
+    L = config.localities_per_district
+    geo = pl.DataFrame({
+        "district": np.repeat(np.arange(len(b.districts), dtype=np.int64), L),
+        "district_id": pl.Series(np.repeat(np.array(district_ids, dtype=object), L).tolist(), dtype=pl.String),
+        "kind": pl.Series(np.repeat(np.array([d.kind for d in b.districts], dtype=object), L).tolist(), dtype=pl.String),
+        "locality": np.tile(np.arange(L, dtype=np.int64), len(b.districts))})
+    latent = pl.DataFrame({"entity_id": state.person_ids,
+                           "month": pl.Series([f"{config.start:%Y-%m}"] * len(p), dtype=pl.String),
+                           **{name: getattr(a, name) for name in LATENT}})
+    return {"persons": persons, "households": households, "orgs": orgs, "banks": banks, "accounts": frames["accounts"],
+            "instruments": frames["instruments"], "edges": edges, "geo": geo, "truth_person_latent": latent}
+
+
+def account_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]:
+    """The accounts and instruments tables from live state: every account so far, with its opening date."""
+    b: PopulationBundle = state.population
+    p, h, k = b.persons, b.households, b.banking
+    book = state.book
+    locality = h.locality[h.household_of_person]
+    banked = k.person_has_account
     subtype = np.full(len(book), "current", dtype=object)
     subtype[state.person_deposit[banked]] = np.where(k.person_basic_account[banked], "basic", "savings")
     subtype[b.person_second_deposit[b.person_second_deposit >= 0]] = "savings"
@@ -263,7 +302,7 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
         "type": pl.Series(np.array(["", "DEPOSIT", "CASH", "RESERVE"], dtype=object)[book.type].tolist(), dtype=pl.String),
         "subtype": pl.Series(subtype.tolist(), dtype=pl.String),
         "holder_entity_id": book.holder, "issuer_entity_id": book.issuer,
-        "opened_on": pl.Series([config.start] * len(book), dtype=pl.Date),
+        "opened_on": pl.Series(state.account_opened_on, dtype=pl.Date),
         "status": pl.Series(["ACTIVE"] * len(book), dtype=pl.String)})
 
     upi, card, mobile = k.person_upi, k.person_has_card, k.person_has_mobile & banked
@@ -281,16 +320,4 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
         "instrument_id": np.arange(account_id.size, dtype=np.int64), "account_id": account_id,
         "kind": pl.Series([x[0] for x in parts for _ in range(x[1].size)], dtype=pl.String),
         "value": pl.Series([v for x in parts for v in x[2].tolist()], dtype=pl.String)})
-
-    edges = b.edges.rename({"src": "src_entity_id", "dst": "dst_entity_id"})
-    L = config.localities_per_district
-    geo = pl.DataFrame({
-        "district": np.repeat(np.arange(len(b.districts), dtype=np.int64), L),
-        "district_id": pl.Series(np.repeat(np.array(district_ids, dtype=object), L).tolist(), dtype=pl.String),
-        "kind": pl.Series(np.repeat(np.array([d.kind for d in b.districts], dtype=object), L).tolist(), dtype=pl.String),
-        "locality": np.tile(np.arange(L, dtype=np.int64), len(b.districts))})
-    latent = pl.DataFrame({"entity_id": state.person_ids,
-                           "month": pl.Series([f"{config.start:%Y-%m}"] * len(p), dtype=pl.String),
-                           **{name: getattr(a, name) for name in LATENT}})
-    return {"persons": persons, "households": households, "orgs": orgs, "banks": banks, "accounts": accounts,
-            "instruments": instruments, "edges": edges, "geo": geo, "truth_person_latent": latent}
+    return {"accounts": accounts, "instruments": instruments}

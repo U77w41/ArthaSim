@@ -36,6 +36,16 @@ class Banking:
     merchant_bank: np.ndarray
 
 
+def pick_banks(u: np.ndarray, is_metro: np.ndarray, params: ParamRegistry, n_banks: int) -> np.ndarray:
+    """Bank index for each uniform draw, by the bank archetypes' metro or rural customer shares."""
+    rows = params.get("bank.archetypes")[:n_banks]
+    cum = {kind: np.cumsum(np.array([r[col] for r in rows]) / sum(r[col] for r in rows))
+           for kind, col in (("metro", 1), ("rural", 2))}
+    out = np.where(is_metro, np.searchsorted(cum["metro"], u, side="right"),
+                   np.searchsorted(cum["rural"], u, side="right"))
+    return np.minimum(out, n_banks - 1).astype(np.int64)
+
+
 def assign_banking(persons: Persons, attributes: Attributes, orgs: Orgs, districts: Sequence[DistrictMarginals],
                    config: Config, params: ParamRegistry, seed: int) -> Banking:
     n, B = len(persons), config.banks
@@ -44,17 +54,12 @@ def assign_banking(persons: Persons, attributes: Attributes, orgs: Orgs, distric
     rows = params.get("bank.archetypes")[:B]
     kinds = np.array([d.kind for d in districts])
     is_metro = kinds[persons.district] == "metro"
-    cum = {kind: np.cumsum(np.array([r[col] for r in rows]) / sum(r[col] for r in rows))
-           for kind, col in (("metro", 1), ("rural", 2))}
 
     def u(stream: str, entity: np.ndarray = ids) -> np.ndarray:
         return rng.uniform(seed, S(stream), entity, 0)
 
     def pick_bank(stream: str, entity: np.ndarray, metro: np.ndarray) -> np.ndarray:
-        draw = u(stream, entity)
-        out = np.where(metro, np.searchsorted(cum["metro"], draw, side="right"),
-                       np.searchsorted(cum["rural"], draw, side="right"))
-        return np.minimum(out, B - 1).astype(np.int64)
+        return pick_banks(u(stream, entity), metro, params, B)
 
     def by_kind(param: str) -> np.ndarray:
         value = params.get(param)
