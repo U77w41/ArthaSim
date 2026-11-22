@@ -28,6 +28,7 @@ class Store:
         self._queued: dict[str, int] = {}
         self._month: dict[str, str] = {}
         self._writer: dict[str, pq.ParquetWriter] = {}
+        self._writing: dict[str, Path] = {}             # table -> final name of the file being written
         self._hash: dict[str, RunningHash] = {}
         self.max_queued_rows = 0
 
@@ -56,8 +57,10 @@ class Store:
             folder = self.path / table / f"month={self._month[table]}"
             folder.mkdir(parents=True, exist_ok=True)
             part = len(list(folder.glob("part-*.parquet")))
-            writer = pq.ParquetWriter(folder / f"part-{part}.parquet", arrow.schema, compression="zstd")
-            self._writer[table] = writer
+            final = folder / f"part-{part}.parquet"
+            # Written under a temporary name and renamed on close, so readers never meet a file without a footer.
+            writer = pq.ParquetWriter(final.with_name(final.name + ".tmp"), arrow.schema, compression="zstd")
+            self._writer[table], self._writing[table] = writer, final
         elif arrow.schema != writer.schema:
             arrow = arrow.cast(writer.schema)
         writer.write_table(arrow)
@@ -68,6 +71,8 @@ class Store:
         writer = self._writer.pop(table, None)
         if writer is not None:
             writer.close()
+            final = self._writing.pop(table)
+            final.with_name(final.name + ".tmp").rename(final)
 
     def flush(self) -> None:
         """Write every queued row and close every open file."""

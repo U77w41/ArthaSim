@@ -146,7 +146,9 @@ class World:
 
     def watch(self, entity_id: int, callback: Callable[[dict], None]) -> None:
         """Call `callback` after each simulated day on which the entity made or received a payment attempt or had a
-        life event, with that day's payments, events, end-of-day balances and (on a month's first day) its state."""
+        life event, with that day's payments, events, end-of-day balances and, on a day the life course ran (the
+        first of a month and the first simulated day), its monthly state. The day is complete before the call, so
+        a callback that raises leaves the world ready to continue."""
         self._watchers.setdefault(int(entity_id), []).append(callback)
 
     def unwatch(self, entity_id: int) -> None:
@@ -176,15 +178,21 @@ class World:
                 callback(payload)
 
     def step(self, days: int = 1) -> None:
-        for _ in range(days):
-            self._day()
+        try:
+            for _ in range(days):
+                self._day()
+        finally:
+            self._store.flush()                 # close open files even when a day or a callback raised
         self._flush()
 
     def run(self, until: Date) -> "Run":
         """Simulate up to and including `until`."""
         until = _as_date(until)
-        while self._date <= until:
-            self._day()
+        try:
+            while self._date <= until:
+                self._day()
+        finally:
+            self._store.flush()                 # close open files even when a day or a callback raised
         self._flush()
         return Run.open(self.path)
 
@@ -204,8 +212,6 @@ class World:
         self._store.add("payments", month, payments)
         self._store.add("journal", month, journal)
         self._store.add("postings", month, postings)
-        if self._watchers:
-            self._notify(day, payments, frames)
         self._days += 1
         self._payments += payments.height
         self._date = day + dt.timedelta(days=1)
@@ -218,6 +224,8 @@ class World:
                 "balance_paise": book.balance.copy()}))
             self._store.end_month(month)
         self._wall += time.perf_counter() - started
+        if self._watchers:                      # last, once the day is complete (callback time is not counted)
+            self._notify(day, payments, frames)
 
     def _content_hashes(self) -> dict[str, str]:
         """Fact tables from the store's live hashes; dimension tables from disk."""
