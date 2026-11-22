@@ -43,5 +43,22 @@ class InstrumentBook:
         self.balance = self.opening.copy()
         self._frozen = True
 
+    def extend(self, type: int, holders, issuers, openings) -> np.ndarray:
+        """Append instruments after freeze (accounts opened during a run); returns their ids."""
+        if not self._frozen:
+            raise RuntimeError("extend is for a frozen book; use add_many while building")
+        holders = np.asarray(holders, dtype=np.int64)
+        n = holders.shape[0]
+        issuers = np.broadcast_to(np.asarray(issuers, dtype=np.int64), (n,))
+        openings = np.broadcast_to(np.asarray(openings, dtype=np.int64), (n,))
+        self.type = np.concatenate([self.type, np.full(n, int(type), dtype=np.int64)])
+        self.holder = np.concatenate([self.holder, holders])
+        self.issuer = np.concatenate([self.issuer, issuers])
+        self.opening = np.concatenate([self.opening, openings])
+        self.balance = np.concatenate([self.balance, openings])
+        ids = np.arange(self._count, self._count + n, dtype=np.int64)
+        self._count += n
+        return ids
+
     def __len__(self) -> int:
         return self._count
