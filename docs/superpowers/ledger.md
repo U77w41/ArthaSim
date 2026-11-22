@@ -378,3 +378,132 @@ A fresh reviewer (Opus) read the whole branch, ran the fast suite and the new ga
   - the tiny-world swap test does not assert that a district ran short;
   - no in-run test checks that coverage and the women's tier stay with the same people;
   - no PM-Kisan age-tie test.
+
+# Plan 1c (data products) execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-23-arthasim-plan-1c-data-products.md`. Spec: `docs/superpowers/specs/2026-11-22-data-products-design.md`.
+Run on an Apple M5 with Python 3.12 (polars 2.1.0, duckdb 2.0.1), from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `claude/gallant-roentgen-ebc4d9` in its own git worktree, then rebased onto `main` at `e9fd517` (plan 1d-1) before the fix pass. Executed inline (native), with one fresh Opus review of the whole branch.
+
+The project owner agreed the shape in conversation: researchers in Python first, then a bank dataset for partners; views carry simulator IDs, exports carry each bank's own numbers. The owner then went offline with a standing instruction to decide the rest from the real world and public evidence. Those decisions are marked "Decided overnight" in the spec, each with its source and its cost if wrong. A builder-check subagent read the spec before planning. Its four questions were settled the same way: views read closed files; KYC holds a birth year; the "no change" check is against the `main` tip at merge; ATM and AePS withdrawals name a terminal.
+
+## Tasks
+
+- Task 1 (incremental store, live content hash in the old format): red (no `arthasim.store.hashing`), green 6 new; suite 180 passed. Tier S, 90 days, seed 7: every manifest hash equalled `main`'s.
+- Task 2 (opaque handles, ACCOUNT_NO, TERMINAL, `bank_customers`, `birth_year`, `opening_balance_paise`): red (4 failures), green 4 new and 2 updated pins; suite 184 passed.
+- Task 3 (`balances_monthly`, shared fixture run): red (no table), green 2 new; suite 186 passed.
+- Task 4 (view machinery, truth view): red (no `arthasim.views`), green 5 new; suite 191 passed.
+- Task 5 (bank view, handles, narration, statement lines): red (no `MCC`), green 10 new; suite 201 passed.
+- Task 6 (switch and bureau views): red, green 4 new; suite 205 passed.
+- Task 7 (inspector): red, green 7 new; suite 212 passed.
+- Task 8 (`watch`, `unwatch`): red, green 3 new; suite 215 passed.
+- Task 9 (metrics, `register.metric`): red, then an ambiguous GROUP BY alias (fixed with positional grouping), green 21 new; suite 236 passed.
+- Task 10 (export, manifest, data dictionary): red, then `fetchone()` missing in DuckDB 2.0 and a test that named a bank with customers, green 7 new; suite 243 passed.
+- Task 11 (slow gate `tests/test_gate_1c.py`, `scripts/data_products_demo.py`): the gate passed in 25.7 s; all five slow gates passed in 147 s.
+- Rebase onto `e9fd517`: conflicts in `tests/test_pipeline.py` and the store's `FACT_TABLES`, resolved by keeping both sides; suite 287 passed.
+- DBT in the views (APBS credits from PFMS with the scheme, an `apbs` switch network, the truth view's asof on `truth_dbt_monthly`): red (narration), green 4 new.
+- After the fix pass: suite 299 passed; all six slow gates passed in 220 s.
+- After measurement: the store writes complete Polars files per chunk (store test red, one file; green, five); suite 299 passed.
+
+## Rulings
+
+Each line gives the ruling, then what it costs if wrong.
+
+**Task 1**
+- The row-group test asserts 5 groups, not the plan's "at least 6". Ten 700-row frames written whenever 1,000 rows are queued make 5 groups of 1,400. Cost: none.
+- The live hash feeds the folder name (`month=YYYY-MM`), as the from-disk hash always did. Cost: none.
+
+**Task 2**
+- `account_frames` and `population_frames` take the run seed. The new identifiers are keyed, and `WorldState` has no seed. Cost: none.
+- A person's VPA is keyed on their deposit account, as the spec says. Cost: none.
+
+**Task 3**
+- The store closes every table's hash month at the month end (`Store.end_month`). Otherwise April's `balances_monthly` spool would have lived until the end of May. Cost: none; the digests are unchanged.
+- The split-run test counts accounts opened by 30 April, not `len(book)`. Cost: none.
+
+**Task 4**
+- Truth-view definitions have no ORDER BY, because plain scans keep file order. The final review overturned this for the tables an `asof` cuts (see below). Cost: none for uncut scans.
+- The truth view's `asof` also cuts instruments to accounts opened by then. Cost: none.
+
+**Task 5**
+- Statement lines carry a per-account serial number, `line_seq`, rather than an order key built from `journal_id`. Cost: none.
+- On a card payment seen from the merchant's side, the other side is the cardholder's card token. Cost: one CASE arm.
+- The payer's remark also appears on the payer's own NACH debit line. Cost: narration text only.
+- `mcc` appears on UPI_P2M and DEBIT_CARD rows, from the payee's category. Cost: none.
+
+**Task 6**
+- ATM and AePS terminals are on-us, at the payer's bank. The payer's handle is their card token, falling back to the account number (ATM) or the uid token (AePS). Cost: off-us ATMs would need acquirer banks.
+- Unknown scope arguments raise ValueError. Cost: none.
+
+**Task 7**
+- A payment between two of the entity's own accounts is one timeline row with direction SELF. Cost: none.
+- A life event's timestamp is IST midnight of its date. Cost: none.
+- `passbook` also returns `date`, `line_seq` and the other side's simulator IDs, since the inspector is truth-level. Cost: none.
+
+**Task 8**
+- `watch` uses direction SELF, as the timeline does. Cost: none.
+- `state` comes on any day the life course ran. Cost: none.
+
+**Task 9**
+- A user metric may return a scalar, which is wrapped as a one-row `value` frame. Cost: none.
+- `deposit_balance` covers persons' deposits only. Cost: a second metric for firms.
+
+**Task 10**
+- The bank view's instruments carry `account_no` and drop `instrument_id`, so an export can still link instruments to accounts. Cost: none.
+- An empty fact table exports as one zero-row file, and the manifest records each table's layout. Cost: readers branch on the layout.
+- A truth export copies the run's files and rejects `asof`. Cost: use the truth view for a cut.
+- The month partition column lives only in the folder name. Cost: none.
+
+**Task 11**
+- The gate watches the last 5 of its 90 days. Cost: none.
+
+**DBT integration**
+- APBS credits show PFMS as the other side, with no bank code, and the scheme as the remark. The switch view's `apbs` network routes on the payee's Aadhaar token. DBT flows through PFMS, and NPCI's APBS routes on Aadhaar. Cost: narration text and one network.
+
+**After measurement**
+- The store writes each chunk of 1,000,000 rows as a complete Polars file, under a temporary name renamed when done, instead of row groups to one open PyArrow writer per month. In alternating tier S 90-day runs, the PyArrow writer took the simulation from 9.8 s (`main`) to 16.7 s. With Polars files it is 10.7 s, with the same memory bound. Cost: about five payment files a month at tier S instead of one.
+
+## Findings
+
+- **Memory.** One month of payments, journal and postings took about 1 GB in memory at tier S before the store change. Peak memory now no longer grows with the month; see `docs/phase1c_results.md` for the measured figures.
+- **Narrations.** Real bank narrations have no national template. RBI fixes the UTR format only. The common pattern is rail, direction, reference, the other side and a remark, which the views follow.
+- **Bureau.** A credit bureau holds no file on people who have never applied for credit. So the bureau view is empty until phase 3.
+
+## Final review (plan 1c)
+
+A fresh reviewer (Opus) read the whole branch (`1b5d045..6570590`) and returned "with fixes": no Critical, six Important and ten Minor findings. It confirmed at tier S that the unchanged tables are byte-identical to `main`'s.
+
+**Re-grading.** Two minors were re-graded to Important by their effect:
+- `deposit_balance` raised an error on a run with no closed month, which plan 1d's short experiment arms would hit.
+- Statement lines hash-joined every payment, which made one passbook take 4 GB and was the root of export's memory use.
+
+**Fixed**, each with a test that failed first. Suite 299 passed; all six slow gates passed.
+- **A watch callback that raised left the day half-done**, so continuing duplicated it. The callback now runs at the end of the day. Test: `test_raising_callback_leaves_world_ready_to_continue`.
+- **Part files were written under their final names**, so a mid-run read or a crash left files without a footer, which broke the whole table. Files are now written as `part-N.parquet.tmp` and renamed on close, and `step`/`run` close files in a `finally`. Test: `test_run_is_readable_while_running_and_after_an_error`.
+- **The truth view's `asof` cut returned postings and instruments in a varying order.** Those cuts are semi-joins; they are now explicitly ordered. The check is in the slow gate. On the reviewer's tier S run the cut was red: 23,541,917 rows, in a different order on each call. After the fix it was green.
+- **Export ran each fact table's whole query once per month.** Each table is now built once, in an on-disk DuckDB database that can spill. Test: `test_export_reads_each_table_once` went from 23 reads to 6.
+- **Statement lines joined every payment.** They now join only their own payments. The slow gate checks one person's statement lines fit in 300 MB with no spilling (red: OutOfMemoryException; green: 170 rows).
+- **A run ending mid-month kept its spool in the run folder.** The spool now lives in a temp directory, removed with the store or at exit. Test: `test_finished_runs_keep_no_spool`.
+- **Export tokens could be decoded to simulator IDs, the seed shipped in the manifest, and the README overclaimed.** Tokens are now keyed BLAKE2b digests. The manifest names the source run by a 16-hex digest. The README states the limits. Tests: `test_identifier_tokens_are_keyed_one_way_hashes`, `test_export_carries_no_seed_and_says_what_it_protects`.
+- **`deposit_balance` raised before any month closed.** It now returns an empty frame. Test: `test_deposit_balance_before_any_month_has_closed`.
+- The stale `watch` docstring was corrected in the same edit.
+
+**Rulings on the review.** Each gives the ruling, then what it costs if wrong.
+- `pan_like` (plan 1a) still encodes the person's index. Re-keying it needs a format-preserving keyed permutation to stay unique in the PAN shape, and PAN is a cross-institution key that real banks share anyway. The export README says so. Cost: a partner holding truth tables or the code could map `pan_like` to `entity_id`. Fix before any external release.
+- `ref` stays the payment ID written as 12 digits. The spec decided this, and labels are keyed on it. Cost: it reveals global payment order and volume.
+- The token key derives from the run seed, so someone with the code could brute-force small seeds. Hiding from a determined user is a spec non-goal, and the README says the export is not anonymised against someone with the code. Cost: a partner release needs a secret key (one config field).
+- Items the reviewer set aside, ruled as standing:
+  - the single boundary account (a model limit);
+  - views being readable by file path (spec non-goal);
+  - Polars `hash_rows` changing between versions (non-goal; the manifest records `polars_version`);
+  - no tier M measurement (the spec targets tier S);
+  - the empty bureau view and the narration text (spec decisions);
+  - UPI Lite, AA and regulator views, CSV export and legal review (non-goals);
+  - `Run.sql` path quoting (it predates this plan).
+
+**Deferred minors:**
+- Runs written before plan 1c give unclear errors from views, `inspect` and `deposit_balance`.
+- The truth view's `asof` doesn't cut `bank_customers`.
+- A run path containing a single quote breaks the SQL.
+- `_bank_customers` finds the boundary bank by index, not by code.
+- `deposit_balance` on a spike run names groupings nobody asked for.
+- The cross-bank "every posting once" check counts rows only.
