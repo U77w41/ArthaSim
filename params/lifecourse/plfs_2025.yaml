@@ -1,0 +1,228 @@
+# PLFS 2025 source values for the life course (plan 1b-2).
+# Transcribed from docs/sources/plfs_2025_annual.md, plfs_bulletins_2025_26.md and labour_transitions.md.
+# All values are percentages as published unless stated. Groups: rural_male, rural_female, urban_male,
+# urban_female. Annual columns: 15-19, 20-24, ..., 60-64, 65+, 15+.
+annual:
+  source: https://www.mospi.gov.in/uploads/publications_reports/publications_reports1780040415321_0624fb13-fb47-40bc-b470-7c7e9635c3ef_PLFS_2025_F_REV_29052026.pdf
+  table: Table (15), usual status (ps+ss), columns (6)-(17); PLFS Annual Report January-December 2025
+  pages: rural_male PDF p. 133, printed A-56; rural_female PDF p. 134, printed A-57; urban_male PDF p. 136, printed A-59; urban_female PDF p. 137, printed A-60
+  status: unverified
+  values:
+    rural_male:
+      own_agri: [0.7, 4.0, 10.4, 16.4, 25.2, 31.2, 38.0, 44.9, 47.3, 48.6, 33.5, 23.6]
+      own_secondary: [0.3, 1.8, 3.9, 5.5, 6.3, 6.0, 5.7, 4.9, 4.0, 2.9, 1.5, 3.7]
+      own_tertiary: [0.9, 5.2, 10.6, 13.8, 13.1, 13.9, 13.6, 11.5, 10.7, 7.8, 4.4, 9.1]
+      helper_agri: [9.0, 19.4, 15.6, 9.2, 5.4, 2.9, 1.4, 1.2, 1.4, 2.1, 2.6, 7.3]
+      helper_secondary: [0.4, 1.3, 0.8, 0.3, 0.2, 0.1, 0.0, 0.0, 0.1, 0.1, 0.1, 0.4]
+      helper_tertiary: [1.1, 2.9, 1.9, 1.2, 0.6, 0.2, 0.1, 0.2, 0.1, 0.2, 0.3, 0.9]
+      regular: [3.6, 16.3, 23.3, 23.3, 19.3, 16.7, 13.9, 12.1, 11.1, 3.9, 1.2, 13.3]
+      regular_agri: [0.1, 0.4, 0.4, 0.8, 0.9, 0.8, 0.6, 0.6, 0.7, 0.5, 0.2, 0.5]
+      casual_public: [0.0, 0.1, 0.3, 0.1, 0.1, 0.1, 0.1, 0.2, 0.3, 0.6, 0.5, 0.2]
+      casual_other: [8.3, 20.7, 25.9, 27.0, 28.0, 27.4, 25.1, 21.4, 19.1, 13.8, 5.2, 19.9]
+      casual_other_agri: [1.9, 4.7, 5.8, 6.5, 7.1, 8.0, 8.4, 9.0, 9.0, 7.3, 3.4, 6.0]
+      unemployed: [3.5, 8.8, 4.0, 1.5, 0.4, 0.2, 0.1, 0.1, 0.1, 0.0, 0.0, 2.1]
+      student: [68.6, 17.5, 1.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 11.2]
+      domestic: [0.7, 0.1, 0.2, 0.3, 0.1, 0.1, 0.1, 0.4, 0.7, 2.0, 4.2, 0.8]
+      domestic_collect: [0.2, 0.1, 0.1, 0.1, 0.0, 0.0, 0.1, 0.2, 0.2, 0.8, 1.2, 0.3]
+      pensioner: [0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.2, 0.4, 1.0, 10.8, 28.6, 3.6]
+      disabled: [0.9, 1.0, 1.1, 0.8, 0.9, 0.8, 1.2, 1.8, 2.7, 4.3, 8.6, 2.1]
+      others: [1.7, 0.8, 0.4, 0.2, 0.1, 0.2, 0.3, 0.7, 1.0, 2.2, 8.1, 1.5]
+    rural_female:
+      own_agri: [0.7, 3.8, 9.9, 15.1, 19.0, 21.9, 23.1, 19.7, 17.4, 11.7, 5.3, 12.6]
+      own_secondary: [1.1, 2.9, 3.9, 4.6, 4.6, 4.0, 3.0, 2.3, 1.5, 0.9, 0.5, 2.8]
+      own_tertiary: [0.2, 0.9, 2.0, 2.3, 2.9, 2.7, 3.1, 2.0, 1.5, 1.3, 0.5, 1.7]
+      helper_agri: [5.5, 11.0, 11.9, 15.0, 15.9, 18.5, 18.7, 19.8, 18.4, 16.3, 6.0, 13.6]
+      helper_secondary: [0.7, 0.6, 0.4, 0.6, 0.6, 0.4, 0.5, 0.4, 0.5, 0.2, 0.1, 0.5]
+      helper_tertiary: [0.2, 0.5, 0.5, 1.0, 1.0, 1.1, 0.9, 0.9, 0.9, 0.6, 0.4, 0.7]
+      regular: [0.6, 4.0, 5.3, 5.5, 7.1, 6.1, 6.4, 4.9, 4.1, 1.1, 0.5, 4.2]
+      regular_agri: [0.0, 0.1, 0.3, 0.2, 0.6, 0.4, 0.3, 0.3, 0.2, 0.1, 0.0, 0.2]
+      casual_public: [0.0, 0.2, 0.5, 0.9, 0.9, 1.1, 1.4, 1.7, 1.9, 2.2, 1.6, 1.0]
+      casual_other: [2.2, 4.9, 7.2, 10.5, 13.5, 11.9, 11.5, 10.3, 9.7, 5.9, 3.0, 8.0]
+      casual_other_agri: [1.5, 2.8, 4.7, 7.5, 10.1, 9.2, 9.6, 8.9, 8.5, 5.6, 2.8, 6.2]
+      unemployed: [0.8, 4.4, 2.5, 0.8, 0.3, 0.1, 0.0, 0.0, 0.0, 0.0, 0.1, 1.0]
+      student: [67.6, 16.3, 1.2, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9.9]
+      domestic: [14.6, 38.5, 41.3, 31.1, 24.2, 21.0, 21.5, 23.2, 26.5, 30.0, 28.6, 27.6]
+      domestic_collect: [4.6, 10.9, 12.1, 10.8, 8.4, 9.8, 8.0, 11.9, 12.4, 14.3, 8.0, 9.8]
+      pensioner: [0.1, 0.4, 1.0, 1.3, 1.1, 1.0, 1.2, 2.0, 3.6, 12.5, 30.1, 4.6]
+      disabled: [0.5, 0.5, 0.3, 0.4, 0.5, 0.6, 0.5, 0.7, 1.3, 1.6, 6.9, 1.2]
+      others: [0.6, 0.3, 0.1, 0.0, 0.0, 0.0, 0.1, 0.2, 0.4, 1.5, 8.6, 1.1]
+    urban_male:
+      own_agri: [0.1, 0.9, 1.0, 1.6, 1.9, 3.2, 3.9, 5.3, 5.7, 6.6, 5.4, 2.8]
+      own_secondary: [0.3, 2.7, 4.2, 6.0, 7.9, 9.1, 9.2, 9.4, 8.6, 6.9, 3.0, 5.7]
+      own_tertiary: [1.1, 8.8, 14.3, 18.4, 22.8, 26.9, 29.7, 29.0, 27.8, 20.8, 10.9, 17.8]
+      helper_agri: [0.6, 1.1, 0.9, 0.8, 0.3, 0.2, 0.1, 0.1, 0.1, 0.1, 0.3, 0.5]
+      helper_secondary: [0.9, 1.9, 1.9, 1.1, 0.6, 0.4, 0.1, 0.1, 0.2, 0.1, 0.2, 0.8]
+      helper_tertiary: [2.0, 4.3, 4.2, 3.0, 1.8, 1.2, 0.6, 0.4, 0.5, 0.6, 0.9, 2.0]
+      regular: [7.5, 30.2, 49.9, 52.6, 49.5, 44.0, 40.5, 37.9, 33.7, 14.5, 5.5, 33.9]
+      regular_agri: [0.1, 0.1, 0.2, 0.3, 0.4, 0.2, 0.4, 0.3, 0.3, 0.2, 0.1, 0.2]
+      casual_public: [0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.0, 0.1, 0.0, 0.1, 0.1, 0.1]
+      casual_other: [3.6, 8.8, 10.9, 11.8, 12.2, 12.3, 12.6, 11.5, 11.5, 8.0, 2.7, 9.5]
+      casual_other_agri: [0.3, 0.4, 0.4, 0.4, 0.7, 0.7, 0.9, 1.2, 1.2, 1.7, 0.6, 0.7]
+      unemployed: [2.9, 10.7, 7.9, 3.1, 1.4, 0.9, 0.8, 0.8, 0.5, 0.4, 0.0, 3.2]
+      student: [78.0, 28.5, 3.5, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 12.7]
+      domestic: [0.6, 0.2, 0.1, 0.1, 0.1, 0.3, 0.3, 1.0, 1.5, 4.7, 7.1, 1.2]
+      domestic_collect: [0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.3, 0.7, 0.5, 0.1]
+      pensioner: [0.0, 0.0, 0.0, 0.1, 0.1, 0.3, 0.4, 1.1, 4.7, 28.7, 50.0, 6.5]
+      disabled: [0.6, 0.7, 0.6, 0.6, 0.9, 0.9, 1.2, 2.2, 2.9, 4.2, 6.3, 1.7]
+      others: [1.6, 1.1, 0.6, 0.3, 0.3, 0.3, 0.4, 1.1, 2.0, 3.7, 7.1, 1.5]
+    urban_female:
+      own_agri: [0.0, 0.3, 0.7, 0.9, 1.6, 1.8, 2.1, 2.3, 2.4, 1.9, 1.0, 1.3]
+      own_secondary: [0.6, 2.2, 3.2, 4.7, 5.6, 5.4, 4.4, 3.3, 2.5, 1.6, 0.6, 3.2]
+      own_tertiary: [0.3, 2.4, 3.3, 3.4, 4.4, 4.4, 4.1, 3.8, 2.6, 2.1, 1.5, 3.0]
+      helper_agri: [0.5, 0.6, 0.7, 1.0, 1.0, 1.4, 1.6, 1.5, 1.8, 1.4, 0.5, 1.0]
+      helper_secondary: [0.7, 0.8, 0.6, 0.9, 0.6, 0.8, 0.9, 1.0, 0.7, 0.4, 0.2, 0.7]
+      helper_tertiary: [0.5, 0.6, 1.0, 1.4, 2.2, 2.0, 2.2, 1.6, 1.8, 1.3, 0.6, 1.3]
+      regular: [2.0, 13.1, 18.6, 18.4, 20.0, 19.1, 17.1, 13.7, 11.9, 4.8, 1.8, 13.2]
+      regular_agri: [0.0, 0.0, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.0, 0.0, 0.1]
+      casual_public: [0.0, 0.0, 0.0, 0.1, 0.1, 0.2, 0.2, 0.5, 0.5, 0.6, 0.4, 0.2]
+      casual_other: [0.4, 0.9, 1.2, 2.4, 2.9, 3.1, 3.3, 3.3, 3.1, 2.0, 0.9, 2.1]
+      casual_other_agri: [0.2, 0.2, 0.4, 0.8, 1.3, 1.4, 1.3, 1.3, 1.7, 0.8, 0.4, 0.8]
+      unemployed: [0.9, 6.8, 5.2, 2.1, 0.9, 0.4, 0.2, 0.1, 0.0, 0.0, 0.0, 1.8]
+      student: [80.6, 31.3, 3.3, 0.3, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 11.7]
+      domestic: [11.1, 36.2, 54.5, 55.1, 51.4, 51.9, 54.4, 59.0, 60.8, 57.6, 45.8, 47.7]
+      domestic_collect: [1.0, 3.7, 6.4, 8.0, 7.7, 7.3, 7.2, 5.6, 5.5, 5.5, 2.8, 5.5]
+      pensioner: [0.0, 0.2, 0.5, 0.8, 0.9, 1.6, 1.9, 3.4, 5.2, 17.6, 32.4, 5.4]
+      disabled: [0.5, 0.4, 0.3, 0.3, 0.4, 0.4, 0.4, 0.5, 0.6, 1.6, 5.3, 1.0]
+      others: [0.8, 0.6, 0.3, 0.1, 0.1, 0.1, 0.0, 0.2, 0.4, 1.9, 6.1, 1.0]
+cws_2025:
+  source: https://www.mospi.gov.in/uploads/publications_reports/publications_reports1780040415321_0624fb13-fb47-40bc-b470-7c7e9635c3ef_PLFS_2025_F_REV_29052026.pdf
+  table: Table (30) LFPR and Table (31) WPR, current weekly status, ages 15+, January-December 2025
+  pages: PDF p. 275 (A-198) and p. 277 (A-200)
+  status: unverified
+  values:
+    rural_male: {lfpr: 78.9, wpr: 75.0}
+    rural_female: {lfpr: 38.3, wpr: 36.8}
+    urban_male: {lfpr: 75.3, wpr: 70.7}
+    urban_female: {lfpr: 25.9, wpr: 23.6}
+monthly:
+  source: PLFS monthly bulletins April 2025 (MB-01), May 2025 press note, October 2025, November 2025 and April 2026
+  table: Statement 1 (LFPR) and Statement 2 (WPR), current weekly status, ages 15+
+  pages: see docs/sources/plfs_bulletins_2025_26.md Part 1 (per-month source column)
+  status: unverified
+  values:
+    "2025-04":
+      rural_male: {lfpr: 79.0, wpr: 75.1}
+      rural_female: {lfpr: 38.2, wpr: 36.8}
+      urban_male: {lfpr: 75.3, wpr: 71.0}
+      urban_female: {lfpr: 25.7, wpr: 23.5}
+    "2025-05":
+      rural_male: {lfpr: 78.3, wpr: 74.2}
+      rural_female: {lfpr: 36.9, wpr: 35.2}
+      urban_male: {lfpr: 75.1, wpr: 70.5}
+      urban_female: {lfpr: 25.3, wpr: 23.0}
+    "2025-06":
+      rural_male: {lfpr: 78.1, wpr: 74.1}
+      rural_female: {lfpr: 35.2, wpr: 33.6}
+      urban_male: {lfpr: 75.0, wpr: 70.2}
+      urban_female: {lfpr: 25.2, wpr: 22.9}
+    "2025-07":
+      rural_male: {lfpr: 78.1, wpr: 74.5}
+      rural_female: {lfpr: 36.9, wpr: 35.5}
+      urban_male: {lfpr: 75.1, wpr: 70.1}
+      urban_female: {lfpr: 25.8, wpr: 23.5}
+    "2025-08":
+      rural_male: {lfpr: 77.9, wpr: 74.4}
+      rural_female: {lfpr: 37.4, wpr: 35.9}
+      urban_male: {lfpr: 75.4, wpr: 70.9}
+      urban_female: {lfpr: 26.1, wpr: 23.8}
+    "2025-09":
+      rural_male: {lfpr: 78.1, wpr: 74.4}
+      rural_female: {lfpr: 37.9, wpr: 36.3}
+      urban_male: {lfpr: 75.3, wpr: 70.8}
+      urban_female: {lfpr: 26.1, wpr: 23.7}
+    "2025-10":
+      rural_male: {lfpr: 78.4, wpr: 74.8}
+      rural_female: {lfpr: 38.4, wpr: 36.9}
+      urban_male: {lfpr: 75.3, wpr: 70.8}
+      urban_female: {lfpr: 25.4, wpr: 22.9}
+    "2025-11":
+      rural_male: {lfpr: 78.7, wpr: 75.4}
+      rural_female: {lfpr: 39.7, wpr: 38.4}
+      urban_male: {lfpr: 75.1, wpr: 70.9}
+      urban_female: {lfpr: 25.5, wpr: 23.1}
+    "2025-12":
+      rural_male: {lfpr: 79.3, wpr: 76.0}
+      rural_female: {lfpr: 40.1, wpr: 38.6}
+      urban_male: {lfpr: 74.8, wpr: 70.4}
+      urban_female: {lfpr: 25.3, wpr: 23.0}
+    "2026-01":
+      rural_male: {lfpr: 79.0, wpr: 75.7}
+      rural_female: {lfpr: 39.7, wpr: 38.0}
+      urban_male: {lfpr: 75.1, wpr: 70.5}
+      urban_female: {lfpr: 25.5, wpr: 23.0}
+    "2026-02":
+      rural_male: {lfpr: 78.8, wpr: 75.4}
+      rural_female: {lfpr: 40.0, wpr: 38.4}
+      urban_male: {lfpr: 75.1, wpr: 70.7}
+      urban_female: {lfpr: 25.5, wpr: 23.3}
+    "2026-03":
+      rural_male: {lfpr: 78.5, wpr: 75.0}
+      rural_female: {lfpr: 38.9, wpr: 37.3}
+      urban_male: {lfpr: 75.3, wpr: 70.7}
+      urban_female: {lfpr: 25.2, wpr: 22.9}
+quarterly:
+  source: PLFS quarterly bulletins April-June 2025, July-September 2025, October-December 2025, April-June 2026
+  table: Statement 3 (status in employment) and Statement 4 (industry), % of CWS workers, ages 15+; keyed by the quarter's middle month
+  pages: see docs/sources/plfs_bulletins_2025_26.md Sources table
+  status: unverified
+  values:
+    "2025-05":
+      rural_male: {regular: 17.6, casual: 27.1, agriculture: 44.6}
+      rural_female: {regular: 10.9, casual: 17.5, agriculture: 71.0}
+      urban_male: {regular: 47.5, casual: 12.5, agriculture: 5.3}
+      urban_female: {regular: 55.1, casual: 7.5, agriculture: 10.5}
+    "2025-08":
+      rural_male: {regular: 17.2, casual: 24.9, agriculture: 49.2}
+      rural_female: {regular: 10.8, casual: 17.0, agriculture: 74.2}
+      urban_male: {regular: 48.0, casual: 12.3, agriculture: 5.1}
+      urban_female: {regular: 55.5, casual: 6.6, agriculture: 10.2}
+    "2025-11":
+      rural_male: {regular: 17.1, casual: 24.9, agriculture: 49.4}
+      rural_female: {regular: 10.4, casual: 16.8, agriculture: 75.5}
+      urban_male: {regular: 47.4, casual: 12.5, agriculture: 5.2}
+      urban_female: {regular: 54.3, casual: 7.1, agriculture: 11.2}
+    "2026-02":
+      rural_male: {regular: 17.9, casual: 25.0, agriculture: 46.3}
+      rural_female: {regular: 11.2, casual: 16.1, agriculture: 73.5}
+      urban_male: {regular: 47.2, casual: 12.3, agriculture: 5.1}
+      urban_female: {regular: 54.2, casual: 7.5, agriculture: 11.2}
+flows:
+  source: MoSPI, PLFS Quarterly Bulletin October-December 2024 (25th bulletin, urban), Appendix A
+  table: Table (5), persons 15+ by CWS status in adjacent quarters, joint % of persons of each sex; rows and columns own, helper, regular, casual, unemployed, nlf; '*' is null
+  pages: A-27 to A-30
+  status: unverified
+  values:
+    M:
+      pairs:
+        - [[23.3, 0.1, 0.3, 0.1, 0.1, 0.2], [0.1, 2.9, null, null, null, 0.1], [0.3, null, 32.1, 0.2, 0.4, 0.1], [0.1, null, 0.1, 7.7, 0.5, 0.1], [0.1, null, 0.2, 0.4, 3.4, 0.1], [0.1, null, 0.1, 0.2, 0.1, 25.2]]
+        - [[23.3, 0.1, 0.2, 0.1, 0.1, 0.1], [0.1, 3.0, null, null, null, 0.1], [0.2, null, 32.2, 0.1, 0.3, 0.1], [0.1, null, 0.1, 8.1, 0.3, 0.1], [0.1, 0.1, 0.3, 0.4, 3.6, 0.1], [0.1, 0.1, 0.1, 0.1, 0.1, 25.1]]
+        - [[23.2, 0.1, 0.2, 0.1, 0.1, 0.1], [0.1, 2.7, null, null, null, 0.1], [0.2, null, 33.0, 0.1, 0.3, 0.2], [0.2, null, 0.1, 8.1, 0.5, 0.2], [0.1, 0.1, 0.3, 0.4, 3.1, 0.1], [0.1, 0.1, 0.1, 0.1, 0.1, 24.7]]
+        - [[23.3, 0.1, 0.2, 0.1, 0.1, 0.1], [0.1, 2.8, null, null, null, null], [0.3, null, 33.2, 0.1, 0.3, 0.1], [0.1, null, 0.1, 8.1, 0.4, 0.2], [0.1, null, 0.2, 0.5, 3.4, 0.1], [0.1, null, 0.2, 0.1, 0.1, 24.1]]
+      row_totals:
+        - [24.4, 3.2, 33.1, 8.6, 4.2, 25.7]
+        - [24.3, 3.2, 32.9, 8.8, 4.6, 25.5]
+        - [24.2, 3.0, 33.8, 9.0, 4.1, 25.3]
+        - [24.3, 3.0, 34.0, 8.9, 4.3, 24.7]
+    F:
+      pairs:
+        - [[5.5, 0.1, 0.1, null, null, 0.4], [0.1, 2.7, null, null, null, 0.3], [0.1, null, 11.5, null, 0.1, 0.3], [null, null, null, 1.2, 0.1, 0.2], [null, null, 0.1, 0.1, 1.8, 0.2], [0.3, 0.2, 0.3, 0.1, 0.2, 73.5]]
+        - [[5.7, null, 0.1, 0.1, null, 0.5], [null, 2.5, null, null, null, 0.4], [0.1, null, 11.9, null, 0.1, 0.3], [null, null, null, 1.2, 0.1, 0.2], [null, null, 0.1, 0.1, 1.8, 0.2], [0.3, 0.2, 0.3, 0.1, 0.2, 73.0]]
+        - [[5.7, null, 0.1, null, null, 0.4], [0.0, 2.2, null, null, null, 0.2], [null, null, 12.0, null, 0.1, 0.3], [null, null, 0.0, 1.1, 0.1, 0.2], [null, null, 0.1, 0.1, 1.7, 0.2], [0.4, 0.3, 0.3, 0.2, 0.2, 73.5]]
+        - [[5.8, null, null, null, null, 0.5], [0.1, 2.4, null, null, null, 0.3], [0.1, 0.0, 12.0, 0.0, 0.1, 0.2], [null, null, null, 1.1, 0.1, 0.2], [null, null, 0.1, null, 1.7, 0.2], [0.3, 0.2, 0.3, 0.2, 0.1, 73.6]]
+      row_totals:
+        - [6.2, 3.1, 12.0, 1.5, 2.1, 74.7]
+        - [6.5, 3.0, 12.3, 1.6, 2.2, 74.1]
+        - [6.3, 2.5, 12.5, 1.4, 2.2, 74.9]
+        - [6.5, 2.8, 12.4, 1.4, 2.0, 74.7]
+effects:
+  source: https://arxiv.org/abs/2110.05482v2
+  table: Bhattacharya (2021), Table 7, average marginal effects on the quarterly probability of losing (employed to not employed) and gaining employment
+  pages: p. 20
+  status: unverified
+  values:
+    F:
+      lost: {very_young: 0.077, young: 0.022, graduate: -0.043, has_child: 0.009, married: 0.036, e_ratio: -0.089, streak2: -0.065, streak3: -0.099}
+      gained: {very_young: -0.015, young: 0.001, graduate: -0.003, has_child: -0.005, married: -0.007, e_ratio: 0.052, streak2: -0.014, streak3: -0.02}
+    M:
+      lost: {very_young: 0.027, young: 0.007, graduate: -0.012, has_child: 0.002, married: -0.026, e_ratio: -0.039, streak2: -0.021, streak3: -0.034}
+      gained: {very_young: -0.054, young: 0.019, graduate: -0.028, has_child: 0.014, married: 0.037, e_ratio: 0.12, streak2: -0.03, streak3: -0.046}

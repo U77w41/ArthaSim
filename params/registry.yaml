@@ -268,11 +268,11 @@
   status: assumption
   role: input
 - id: inclusion.account_ownership
-  value: {metro: 0.9, rural: 0.8}
+  value: {metro: 0.89, rural: 0.89}
   unit: ''
   as_of: 2026-11
-  source: plan 1a placeholder
-  status: assumption
+  source: Global Findex 2025 (PIB factsheet 150832)
+  status: unverified
   role: input
 - id: inclusion.second_account_share
   value: {metro: 0.25, rural: 0.1}
@@ -404,3 +404,164 @@
     withdrawal placeholder, status: assumption, role: input}
 - {id: cash.person_deposit_daily_prob, value: 0.2, unit: '', as_of: 2026-11, source: plan
     1b-1 placeholder, status: assumption, role: input}
+- id: life.gig.nonfarm_share
+  value: {2020: 0.026, 2029: 0.067}
+  unit: 'share of non-farm workers, by fiscal-year start'
+  as_of: 2026-11
+  source: NITI Aayog 2022, India's Booming Gig and Platform Economy
+  status: unverified
+  role: input
+- id: life.return.weight
+  value: 5
+  unit: 'multiplier'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.return.window_months
+  value: 12
+  unit: 'months'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.retire.superannuation_age
+  value: {private: 58, public_admin: 60}
+  unit: 'years'
+  as_of: 2026-11
+  source: Industrial Employment (Standing Orders) model rules; FR 56(a)
+  status: unverified
+  role: input
+- id: life.retire.superannuation_prob
+  value: 0.5
+  unit: 'probability'
+  as_of: 2026-11
+  source: plan 1b-2 assumption (PLFS 2025 salaried 55-59 to 60-64)
+  status: assumption
+  role: input
+- id: life.study.max_age
+  value: 35
+  unit: 'years'
+  as_of: 2026-11
+  source: PLFS 2025 Table 15 (code 91 near zero from 35)
+  status: unverified
+  role: input
+- id: life.within.farm_nonfarm
+  value: 0.005
+  unit: 'per month'
+  as_of: 2026-11
+  source: ICRISAT VDSA (occupation changes)
+  status: unverified
+  role: input
+- id: life.within.self_gig
+  value: 0.01
+  unit: 'per month'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.within.helper_to_own
+  value: 0.005
+  unit: 'per month'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.within.own_to_helper
+  value: 0.001
+  unit: 'per month'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.within.homemaker_retired
+  value: 0.001
+  unit: 'per month'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.flows.negligible_pct
+  value: 0.025
+  unit: 'percent of persons'
+  as_of: 2026-11
+  source: plan 1b-2 assumption (half the 0.05 rounding)
+  status: assumption
+  role: input
+- id: life.prob_bounds
+  value: [0.0003, 0.95]
+  unit: 'probability'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.switch.monthly_prob
+  value: 0.011
+  unit: 'per month'
+  as_of: 2026-11
+  source: Aon 2025 salary increase survey (16.2% attrition less 3.4% involuntary)
+  status: unverified
+  role: input
+- id: life.switch.young
+  value: {age: 30, multiplier: 1.5}
+  unit: ''
+  as_of: 2026-11
+  source: plan 1b-2 assumption (EPFO age mix)
+  status: assumption
+  role: input
+- id: life.switch.same_sector_prob
+  value: 0.7
+  unit: 'probability'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.switch.pay_factor
+  value: {median: 1.15, sigma: 0.15}
+  unit: 'multiplier, log sd'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.layoff.employer_shock_sigma
+  value: 0.5
+  unit: 'log sd'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.raise.mean
+  value: 0.089
+  unit: 'share'
+  as_of: 2026-11
+  source: Aon 2025 salary increase survey (actual 2025)
+  status: unverified
+  role: input
+- id: life.raise.sd
+  value: 0.04
+  unit: 'share'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input
+- id: life.raise.april_share
+  value: 0.56
+  unit: 'share of employers'
+  as_of: 2026-11
+  source: Naukri appraisal survey 2023
+  status: unverified
+  role: input
+- id: life.account.open_monthly_prob
+  value: 0.015
+  unit: 'per month'
+  as_of: 2026-11
+  source: plan 1b-2 assumption (Findex trend)
+  status: assumption
+  role: input
+- id: life.rake.floor
+  value: 1.0e-6
+  unit: 'share of a row'
+  as_of: 2026-11
+  source: plan 1b-2 assumption
+  status: assumption
+  role: input

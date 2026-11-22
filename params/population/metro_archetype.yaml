@@ -10,6 +10,7 @@ adult_population: 3000000
 age_band: [0.17, 0.26, 0.22, 0.22, 0.13]
 sex: [0.48, 0.52]
 education: [0.10, 0.15, 0.35, 0.30, 0.10]
+# Used only when the build runs without PLFS targets (tests of the old path).
 life_stage:
   - [0.07, 0.03, 0.18, 0.08, 0.02, 0.00, 0.05, 0.47, 0.10]   # F
   - [0.08, 0.05, 0.40, 0.20, 0.07, 0.01, 0.09, 0.00, 0.10]   # M
