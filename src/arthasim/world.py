@@ -234,6 +234,11 @@ class Run:
         from arthasim.views import make_view
         return make_view(self, kind, asof=asof, **scope)
 
+    def inspect(self, entity_id: int):
+        """Follow one person or organisation: profile, timeline, passbook, net worth, social links."""
+        from arthasim.inspector import EntityTrace
+        return EntityTrace(self, entity_id)
+
     def sql(self, query: str) -> pl.DataFrame:
         con = duckdb.connect()
         for t in self.tables():
