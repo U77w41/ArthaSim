@@ -167,7 +167,7 @@ DESCRIPTIONS: dict[str, dict[str, str]] = {
     "payments": {
         "payment_id": _PAYMENT, "ref": "12-digit reference number shared by every party to the payment, as a UPI RRN.",
         "ts": "Settlement time, epoch microseconds.", "date": "Settlement date, Asia/Kolkata.",
-        "rail": "UPI_P2M, UPI_P2P, IMPS, NEFT, NACH_CR, DEBIT_CARD, ATM, AEPS or BRANCH.",
+        "rail": "UPI_P2M, UPI_P2P, IMPS, NEFT, NACH_CR, DEBIT_CARD, ATM, AEPS, BRANCH or APBS (government transfers).",
         "status": "SUCCESS, DECLINED_TECH, DECLINED_FUNDS or DECLINED_LIMIT.", "amount_paise": "Amount in paise.",
         "direction": "DR when the bank's customer pays, CR when they receive.",
         "account_id": _ACCOUNT, "account_no": "The bank's own account number on this side.", "entity_id": _ENTITY,
@@ -176,8 +176,9 @@ DESCRIPTIONS: dict[str, dict[str, str]] = {
         "counterparty_bank": "Bank code of the other side (the bank itself for ATM, AePS and branch).",
         "mcc": "Merchant category code of the payee (UPI_P2M and card).",
         "device_token": "The customer's device token when they pay by UPI.",
-        "payer_handle": "Payer's VPA, account number, card token or Aadhaar token (AePS).",
-        "payer_bank": "Payer's bank code.", "payee_handle": "Payee's VPA, account number, terminal or ATM ID.",
+        "payer_handle": "Payer's VPA, account number, card token, Aadhaar token (AePS) or PFMS (APBS).",
+        "payer_bank": "Payer's bank code (none for the government, which banks with the central bank).",
+        "payee_handle": "Payee's VPA, account number, terminal, ATM ID or Aadhaar token (APBS).",
         "payee_bank": "Payee's bank code (the payer's bank for ATM and AePS).",
         "payer_device_token": "Payer's device token (UPI).",
     },
@@ -213,7 +214,10 @@ MCC = {"grocery": 5411, "food": 5812, "fuel": 5541, "pharmacy": 5912, "apparel":
        "transport": 4121, "services": 7299, "other": 5999, "telecom": 4814, "electricity": 4900, "ecommerce": 5399,
        "amc": 6211}
 # Purposes a payer's remark names in the narration, by rail. The only use of `purpose` outside the truth layer.
-REMARKS: dict[str, set[str]] = {"NACH_CR": {"SALARY", "PENSION"}}
+REMARKS: dict[str, set[str]] = {"NACH_CR": {"SALARY", "PENSION"},
+                                 "APBS": {"DBT_PM_KISAN", "DBT_OLD_AGE_PENSION", "DBT_WOMEN"}}
+# Government transfers reach beneficiaries through PFMS, the Public Financial Management System, over APBS.
+GOVERNMENT_HANDLE = "PFMS"
 _NARRATION_RAIL = {"UPI_P2M": "UPI", "UPI_P2P": "UPI", "NACH_CR": "NACH", "DEBIT_CARD": "POS"}
 
 
@@ -254,6 +258,7 @@ def counterparty_handle_sql(rail: str, own_is_payer: str, own: str, own_h: str, 
         when {rail} = 'ATM' then 'ATM' || coalesce({own_h}.branch, {own}.bank_code)
         when {rail} = 'AEPS' then 'MATM' || coalesce({own_h}.branch, {own}.bank_code)
         when {rail} = 'BRANCH' then coalesce({own_h}.branch, {own}.bank_code)
+        when {rail} = 'APBS' then '{GOVERNMENT_HANDLE}'
         else coalesce({other_h}.account_no, {other_h}.vpa) end)"""
 
 
@@ -419,7 +424,7 @@ def _bank_view(run: "Run", asof: Date | None, scope: dict) -> View:
 # -- switch -------------------------------------------------------------------------------------------------------
 
 NETWORKS = {"upi": ("UPI_P2M", "UPI_P2P"), "imps": ("IMPS",), "nach": ("NACH_CR",), "card": ("DEBIT_CARD",),
-            "atm": ("ATM",), "aeps": ("AEPS",)}
+            "atm": ("ATM",), "aeps": ("AEPS",), "apbs": ("APBS",)}
 
 
 def _switch(view: View, asof: dt.date | None) -> dict[str, str]:
@@ -433,13 +438,15 @@ def _switch(view: View, asof: dt.date | None) -> dict[str, str]:
                case when y.rail in ('UPI_P2M', 'UPI_P2P') then coalesce(ph.vpa, ph.account_no)
                     when y.rail in ('IMPS', 'NACH_CR') then ph.account_no
                     when y.rail in ('DEBIT_CARD', 'ATM') then coalesce(ph.card_token, ph.account_no)
-                    when y.rail = 'AEPS' then pp.uid_token end as payer_handle,
+                    when y.rail = 'AEPS' then pp.uid_token
+                    when y.rail = 'APBS' then '{GOVERNMENT_HANDLE}' end as payer_handle,
                y.payer_bank,
                case when y.rail in ('UPI_P2M', 'UPI_P2P') then coalesce(eh.vpa, eh.account_no)
                     when y.rail in ('IMPS', 'NACH_CR') then eh.account_no
                     when y.rail = 'DEBIT_CARD' then coalesce(eh.terminal, eh.account_no)
                     when y.rail = 'ATM' then 'ATM' || coalesce(ph.branch, pa.bank_code)
-                    when y.rail = 'AEPS' then 'MATM' || coalesce(ph.branch, pa.bank_code) end as payee_handle,
+                    when y.rail = 'AEPS' then 'MATM' || coalesce(ph.branch, pa.bank_code)
+                    when y.rail = 'APBS' then pq.uid_token end as payee_handle,
                case when y.rail in ('ATM', 'AEPS') then y.payer_bank else y.payee_bank end as payee_bank,
                case when y.rail in ('UPI_P2M', 'DEBIT_CARD') then {mcc_sql('pe.category')} end as mcc,
                case when y.rail in ('UPI_P2M', 'UPI_P2P') then ph.device_token end as payer_device_token
@@ -449,6 +456,7 @@ def _switch(view: View, asof: dt.date | None) -> dict[str, str]:
         left join acct pe on pe.account_id = y.payee_account_id
         left join h eh on eh.account_id = y.payee_account_id
         left join {src('persons')} pp on pp.entity_id = pa.holder_entity_id
+        left join {src('persons')} pq on pq.entity_id = pe.holder_entity_id
         where y.rail in ({rails}) {when}
         order by y.settle_ts, y.payment_id"""
     return {"payments": payments}

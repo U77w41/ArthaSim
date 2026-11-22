@@ -175,7 +175,16 @@ A payment's other side, as seen by an observer, is a handle plus a bank code. Wh
 
 > **Decided overnight under the user's standing instruction:** ATM and AePS withdrawals name a terminal, not a branch. On a real ATM network the switch and the issuer see the terminal ID and the acquirer. AePS runs on a business correspondent's micro-ATM in the customer's area. Making the terminal from the home branch (bank, district, locality) gives each locality its own terminal, needs no new data, and keeps where a withdrawal happened for later fraud work. Withdrawals happen at the person's own bank in the model. Cost if wrong: an off-us ATM model would need real terminal entities and their own acquirer bank.
 
-**Narration remarks per rail** are one mapping in code, `{rail: purposes that carry a remark}`. Today it is NACH_CR with SALARY and PENSION. Plan 1d adds APBS with the three DBT schemes, which real DBT credits name (the DBT spec asks for this).
+**Narration remarks per rail** are one mapping in code, `{rail: purposes that carry a remark}`. It covers:
+- NACH_CR with SALARY and PENSION;
+- APBS with the three DBT schemes, which real DBT credits name (the DBT spec asks for this).
+
+> **Decided overnight under the user's standing instruction (after the DBT plan, 1d-1, landed on `main` first):**
+> - **The other side of an APBS credit is `PFMS`**, the Public Financial Management System that the government pays transfers through. It has no bank code, because the government banks with the central bank.
+> - **The switch view gains an `apbs` network.** APBS is run by NPCI and routes credits by the beneficiary's Aadhaar number, so the payee's handle there is their `uid_token` and the payer's is `PFMS`.
+> - Example narration: `APBS/CR/000000076602/PFMS/DBT_WOMEN`.
+>
+> Cost if wrong: narration text and one switch network.
 
 **Merchant category code (MCC)** comes from the payee organisation's category, using ISO 18245 codes:
 
