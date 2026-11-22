@@ -61,8 +61,9 @@ def test_split_run_hashes_equal_single_run(tmp_path):
 
 
 def test_spool_files_are_removed_when_a_month_closes(tmp_path):
-    run = World.build(_cfg(tmp_path), seed=7).run(until="2025-05-02")
-    spool = list(Path(run.path, ".spool").glob("*"))
+    w = World.build(_cfg(tmp_path), seed=7)
+    w.run(until="2025-05-02")
+    spool = list(w._store.spool_dir.glob("*"))
     assert spool and not [f for f in spool if "2025-04" in f.name]
 
 

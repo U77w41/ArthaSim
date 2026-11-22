@@ -2,6 +2,9 @@
 memory does not grow with the size of a month."""
 from __future__ import annotations
 
+import shutil
+import tempfile
+import weakref
 from pathlib import Path
 
 import polars as pl
@@ -31,6 +34,9 @@ class Store:
         self._writing: dict[str, Path] = {}             # table -> final name of the file being written
         self._hash: dict[str, RunningHash] = {}
         self.max_queued_rows = 0
+        # The open month's seed-1 row hashes wait here, outside the run folder; removed with the store or at exit.
+        self.spool_dir = Path(tempfile.mkdtemp(prefix="arthasim-spool-"))
+        self._cleanup = weakref.finalize(self, shutil.rmtree, str(self.spool_dir), True)
 
     def add(self, table: str, month: str, frame: pl.DataFrame) -> None:
         if not frame.height:
@@ -39,7 +45,7 @@ class Store:
             self._close(table)
         self._month[table] = month
         if table not in self._hash:
-            self._hash[table] = RunningHash(self.path / ".spool", table)
+            self._hash[table] = RunningHash(self.spool_dir, table)
         self._hash[table].update(month, frame)
         self._queue.setdefault(table, []).append(frame)
         self._queued[table] = self._queued.get(table, 0) + frame.height

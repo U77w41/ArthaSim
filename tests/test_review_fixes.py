@@ -111,3 +111,16 @@ def test_export_reads_each_table_once(tmp_path, monkeypatch):
     small_run().export(tmp_path / "x", view="bank", bank="SYNB03")
     reads = [q for c in made for q in c.statements if "read_parquet(" in q]
     assert len(reads) == 6                                     # one per bank-view table
+
+
+def test_finished_runs_keep_no_spool(tmp_path):
+    """I5: the open month's spool lives outside the run folder and goes when the world does."""
+    w = World.build(_cfg(tmp_path, "s", start="2025-04-28"), seed=7)
+    run = w.run(until="2025-05-03")                            # ends mid-May
+    assert not Path(run.path, ".spool").exists()
+    spool = w._store.spool_dir
+    assert spool.exists() and any(spool.iterdir())             # May's spool, kept while the world can continue
+    assert not [f for f in spool.iterdir() if "2025-04" in f.name]
+    del w
+    gc.collect()
+    assert not spool.exists()

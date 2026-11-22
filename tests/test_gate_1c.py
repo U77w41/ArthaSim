@@ -25,7 +25,7 @@ def test_plan_1c_gate(tmp_path):
 
     for t in run.tables():
         assert run.manifest["content_hash"][t] == content_hash(run.path, t), t
-    assert not list(Path(run.path, ".spool").glob("*2025-05*"))
+    assert not Path(run.path, ".spool").exists() and not list(world._store.spool_dir.glob("*2025-05*"))
 
     cut = run.view("truth", asof="2025-06-10")
     first, second = cut.table("postings").collect(), cut.table("postings").collect()
