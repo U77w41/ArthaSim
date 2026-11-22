@@ -20,7 +20,7 @@ def test_bank_export_round_trip(tmp_path):
     v = run.view("bank", bank="SYNB03")
     m = json.loads((dest / "manifest.json").read_text())
     assert m["view"] == "bank" and m["scope"] == {"bank": "SYNB03"} and m["asof"] is None
-    assert m["source_run_id"] == run.manifest["run_id"] and m["source_content_hash"] == run.manifest["content_hash"]
+    assert len(m["source_run"]) == 16 and m["source_content_hash"] == run.manifest["content_hash"]
     assert set(m["tables"]) == set(v.tables())
     for t in v.tables():
         meta = m["tables"][t]

@@ -1,6 +1,7 @@
 """Synthetic identifiers. None of them can match a real format."""
 from __future__ import annotations
 
+import hashlib
 import re
 
 import numpy as np
@@ -26,10 +27,17 @@ def pan_like(index, initial, type_letter: str = "P") -> np.ndarray:
     return np.array(out, dtype=object)
 
 
+def keyed_bits(seed: int, stream: int, ids) -> list[int]:
+    """64 bits per id from a keyed BLAKE2b digest. One-way: unlike the simulation's counter-based draws, a token
+    cannot be turned back into the id it was made from. The key depends on the run seed and the stream."""
+    key = hashlib.blake2b(f"arthasim.ids/{seed}/{stream}".encode(), digest_size=32).digest()
+    return [int.from_bytes(hashlib.blake2b(i.to_bytes(8, "little", signed=True), key=key, digest_size=8).digest(),
+                           "little") for i in np.asarray(ids, dtype=np.int64).tolist()]
+
+
 def token(prefix: str, seed: int, stream: int, ids) -> np.ndarray:
     """Opaque token: prefix, underscore, 16 hex digits."""
-    values = rng.bits(seed, stream, np.asarray(ids, dtype=np.int64), 0)
-    return np.array([f"{prefix}_{v:016x}" for v in values.tolist()], dtype=object)
+    return np.array([f"{prefix}_{v:016x}" for v in keyed_bits(seed, stream, ids)], dtype=object)
 
 
 def branch_code(bank_index, district_index, locality) -> np.ndarray:
@@ -47,16 +55,15 @@ def vpa(seed: int, account_ids, bank_index, prefix: str = "p") -> np.ndarray:
 
 def account_no(seed: int, account_ids, bank_codes) -> np.ndarray:
     """The bank's own account number: bank code, hyphen, 16 hex digits keyed on the account."""
-    values = rng.bits(seed, rng.stream_id("id.account_no"), np.asarray(account_ids, dtype=np.int64), 0)
-    return np.array([f"{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values.tolist())], dtype=object)
+    values = keyed_bits(seed, rng.stream_id("id.account_no"), account_ids)
+    return np.array([f"{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values)], dtype=object)
 
 
 def customer_no(seed: int, entity_ids, bank_index, bank_codes) -> np.ndarray:
     """The bank's own customer number for (bank, entity): CIF, bank code, hyphen, 16 hex digits."""
     key = np.asarray(entity_ids, dtype=np.int64) * 64 + np.asarray(bank_index, dtype=np.int64)
-    values = rng.bits(seed, rng.stream_id("id.customer_no"), key, 0)
-    return np.array([f"CIF{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values.tolist())],
-                    dtype=object)
+    values = keyed_bits(seed, rng.stream_id("id.customer_no"), key)
+    return np.array([f"CIF{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values)], dtype=object)
 
 
 def terminal(seed: int, account_ids) -> np.ndarray:

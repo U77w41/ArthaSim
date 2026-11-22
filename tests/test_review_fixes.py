@@ -124,3 +124,36 @@ def test_finished_runs_keep_no_spool(tmp_path):
     del w
     gc.collect()
     assert not spool.exists()
+
+
+def _blake(seed, stream, i):
+    import hashlib
+    key = hashlib.blake2b(f"arthasim.ids/{seed}/{stream}".encode(), digest_size=32).digest()
+    return int.from_bytes(hashlib.blake2b(int(i).to_bytes(8, "little", signed=True), key=key,
+                                          digest_size=8).digest(), "little")
+
+
+def test_identifier_tokens_are_keyed_one_way_hashes():
+    """I6: tokens are keyed BLAKE2b digests, not an invertible mix of (seed, stream, id)."""
+    import numpy as np
+    from arthasim.build.identifiers import account_no, customer_no, token
+    from arthasim.engine import rng
+    ids = np.array([0, 1, 32, 41872], dtype=np.int64)
+    assert token("u", 7, 99, ids).tolist() == [f"u_{_blake(7, 99, i):016x}" for i in ids]
+    s = rng.stream_id("id.account_no")
+    assert account_no(7, ids, ["SYNB03"] * 4).tolist() == [f"SYNB03-{_blake(7, s, i):016x}" for i in ids]
+    s = rng.stream_id("id.customer_no")
+    assert customer_no(7, ids, np.full(4, 2), ["SYNB03"] * 4).tolist() == \
+        [f"CIFSYNB03-{_blake(7, s, i * 64 + 2):016x}" for i in ids]
+
+
+def test_export_carries_no_seed_and_says_what_it_protects(tmp_path):
+    from run_fixture import small_run
+    run = small_run()
+    dest = run.export(tmp_path / "b", view="bank", bank="SYNB03")
+    text = (dest / "manifest.json").read_text() + (dest / "README.md").read_text()
+    assert "seed" not in text.lower() and run.manifest["run_id"] not in text
+    m = json.loads((dest / "manifest.json").read_text())
+    assert "source_run_id" not in m and len(m["source_run"]) == 16
+    readme = (dest / "README.md").read_text()
+    assert "not anonymised" in readme and "pan_like" in readme and "ref" in readme

@@ -4,6 +4,7 @@ Observer views (bank, switch, bureau) drop every simulator ID: what remains is w
 A truth export copies the run's files as they are."""
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import tempfile
@@ -87,12 +88,17 @@ def _export_table(con: duckdb.DuckDBPyConnection, definition: str, name: str, fa
 
 def _readme(view: View, run: "Run", tables: dict[str, dict[str, Any]], asof: str | None) -> str:
     lines = [f"# {view.kind.capitalize()} view export", "",
-             f"Source run `{run.manifest['run_id']}`, view `{view.kind}`, scope `{json.dumps(view.scope)}`, "
+             f"Source run `{_source(run)}`, view `{view.kind}`, scope `{json.dumps(view.scope)}`, "
              f"as of {asof or 'the end of the run'}. Money is in paise; times are epoch microseconds; dates are "
              "Asia/Kolkata. Synthetic data: no record describes a real person, account or bank.", ""]
     if view.kind != "truth":
-        lines += ["Simulator IDs are removed. Customers and accounts carry the bank's own numbers; the other side of a "
-                  "payment appears only as a handle and a bank code.", ""]
+        lines += ["Simulator ID columns are removed. Customers and accounts carry the bank's own numbers, and the "
+                  "other side of a payment appears only as a handle and a bank code. Customer and account numbers, "
+                  "VPAs, terminals and the device, card, mobile and Aadhaar tokens are keyed one-way hashes. Two "
+                  "things still follow the simulation's order: `ref` is the run's payment sequence number (as an "
+                  "RRN would be), and `pan_like` encodes the person's place in the population. This export is not "
+                  "anonymised against someone who has the simulator's code and the run's settings; a release outside "
+                  "the project needs the review in section 17 of the blueprint.", ""]
     for t, meta in tables.items():
         layout = "one folder per month (`month=YYYY-MM`)" if meta["layout"] == "month" else "one file"
         lines += [f"## {t}", "", f"{meta['rows']:,} rows, {layout}.", "", "| Column | Type | Meaning |",
@@ -101,6 +107,11 @@ def _readme(view: View, run: "Run", tables: dict[str, dict[str, Any]], asof: str
         lines += [f"| {c} | {ty} | {meanings.get(c, '')} |" for c, ty in meta["columns"]]
         lines.append("")
     return "\n".join(lines)
+
+
+def _source(run: "Run") -> str:
+    """The source run, named without its seed or settings."""
+    return hashlib.sha256(run.manifest["run_id"].encode()).hexdigest()[:16]
 
 
 def export_view(run: "Run", dest: str | Path, view: str = "bank", asof: Date | None = None, **scope: Any) -> Path:
@@ -120,7 +131,7 @@ def export_view(run: "Run", dest: str | Path, view: str = "bank", asof: Date | N
                 tables = {t: _export_table(con, defs[t], t, t in v.fact_tables, True, dest) for t in sorted(defs)}
             finally:
                 con.close()
-    manifest = {"source_run_id": run.manifest["run_id"], "source_content_hash": run.manifest["content_hash"],
+    manifest = {"source_run": _source(run), "source_content_hash": run.manifest["content_hash"],
                 "view": view, "scope": v.scope, "asof": asof_text, "tables": tables}
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
     (dest / "README.md").write_text(_readme(v, run, tables, asof_text))
