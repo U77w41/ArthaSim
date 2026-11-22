@@ -17,8 +17,9 @@ from arthasim.build.marginals import DistrictMarginals, load_district, load_prio
 from arthasim.build.orgs import Orgs, build_orgs
 from arthasim.build.population import Persons, synthesise_persons
 from arthasim.behaviour import BehaviourState
-from arthasim.build.world import EntityKind, Sector, WorldState
+from arthasim.build.world import EntityKind, GovernmentState, Sector, WorldState
 from arthasim.config import Config
+from arthasim.dbt.schemes import DbtInputs, bpl_households, enrolled_payees
 from arthasim.engine import rng
 from arthasim.engine.intents import Rail
 from arthasim.ledger.instruments import InstrumentBook, InstrumentType as T
@@ -88,7 +89,14 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
     attributes = attach_attributes(persons, districts, params, seed)
     attributes.monthly_income_paise[helper] = 0
     orgs = build_orgs(persons, attributes, districts, L, params, seed)
-    banking = assign_banking(persons, attributes, orgs, districts, config, params, seed)
+    # Government transfers: the BPL list is drawn once, and every payee enrolled at the start is banked.
+    is_metro = np.array([d.kind == "metro" for d in districts])
+    members = households.adults + households.dependants
+    hh_income = np.bincount(households.household_of_person, weights=attributes.monthly_income_paise,
+                            minlength=members.size)
+    bpl = bpl_households(hh_income / members, members, is_metro[households.district], params.get("dbt.bpl.headcount"))
+    payees = enrolled_payees(_dbt_inputs(persons, households, attributes, helper, is_metro, bpl), params, seed)
+    banking = assign_banking(persons, attributes, orgs, districts, config, params, seed, must_bank=payees)
     edges = build_edges(persons, households, orgs, districts, params, seed)
 
     # Entity ids: persons, employers, merchants, billers, banks, boundary bank, NBFCs, central bank, boundary.
@@ -101,14 +109,16 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
     nbfc_ids = int(bank_ids[-1]) + 1 + np.arange(config.nbfcs, dtype=np.int64)
     central_bank_id = int(bank_ids[-1]) + 1 + config.nbfcs
     boundary_id = central_bank_id + 1
-    kind = np.empty(boundary_id + 1, dtype=np.int8)
-    sector = np.empty(boundary_id + 1, dtype=np.int8)
+    government_id = boundary_id + 1
+    kind = np.empty(government_id + 1, dtype=np.int8)
+    sector = np.empty(government_id + 1, dtype=np.int8)
     for ids, k, s in ((person_ids, EntityKind.PERSON, Sector.HOUSEHOLD), (employer_ids, EntityKind.EMPLOYER, Sector.FIRM),
                       (merchant_ids, EntityKind.MERCHANT, Sector.FIRM), (biller_ids, EntityKind.BILLER, Sector.FIRM),
                       (bank_ids, EntityKind.BANK, Sector.BANK), (nbfc_ids, EntityKind.NBFC, Sector.BANK)):
         kind[ids], sector[ids] = k, s
     kind[central_bank_id], sector[central_bank_id] = EntityKind.CENTRAL_BANK, Sector.CENTRAL_BANK
     kind[boundary_id], sector[boundary_id] = EntityKind.BOUNDARY, Sector.BOUNDARY
+    kind[government_id], sector[government_id] = EntityKind.GOVERNMENT, Sector.GOVERNMENT
 
     salaried = persons.life_stage == c.SALARIED
     person_salary = np.where(salaried, attributes.monthly_income_paise, 0).astype(np.int64)
@@ -151,6 +161,8 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
     base_equity = int(params.get("spike.bank_equity_paise"))
     bank_reserve = book.add_many(T.RESERVE, bank_ids, cb, deposits_issued + base_equity)
     bank_vault = book.add_many(T.CASH, bank_ids, cb, vault_cash)
+    # The government's balance at the central bank: opens at zero and may go negative (central-bank financing).
+    government_balance = book.add(T.GOVERNMENT, government_id, cb, 0)
     book.freeze()
 
     n_accounts = len(book)
@@ -166,6 +178,8 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
     vault_for_deposit = np.full(n_accounts, -1, dtype=np.int64)
     with_bank = bank_of_account >= 0
     vault_for_deposit[with_bank] = bank_vault[bank_of_account[with_bank]]
+    reserve_for_deposit = np.full(n_accounts, -1, dtype=np.int64)
+    reserve_for_deposit[with_bank] = bank_reserve[bank_of_account[with_bank]]
     withdraw_rail = np.full(n_accounts, int(Rail.ATM), dtype=np.int64)
     withdraw_rail[person_cash[~banking.person_has_card]] = int(Rail.AEPS)
 
@@ -201,7 +215,24 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
         posted_total=np.zeros(n_accounts, dtype=np.int64), start=config.start, population=bundle,
         boundary_cash=int(boundary_cash), biller_deposit=biller_deposit, biller_cash=biller_cash,
         withdraw_rail=withdraw_rail, behaviour=BehaviourState.zeros(households.adults.size, P), life=life,
-        account_opened_on=np.full(n_accounts, np.datetime64(config.start, "D")))
+        account_opened_on=np.full(n_accounts, np.datetime64(config.start, "D")),
+        reserve_for_deposit=reserve_for_deposit,
+        government=GovernmentState(entity_id=government_id, balance_account=int(government_balance), bpl=bpl))
+
+
+def _dbt_inputs(persons: Persons, households: Households, attributes: Attributes, helper: np.ndarray,
+                is_metro_by_district: np.ndarray, bpl: np.ndarray) -> DbtInputs:
+    return DbtInputs(stage=persons.life_stage, helper=np.asarray(helper, dtype=bool), age=persons.age, sex=persons.sex,
+                     sector=attributes.sector.astype(np.int64), income=attributes.monthly_income_paise,
+                     household=households.household_of_person, is_metro=is_metro_by_district[persons.district],
+                     hh_members=households.adults + households.dependants, bpl=bpl)
+
+
+def dbt_inputs(state: WorldState) -> DbtInputs:
+    """The DBT rules' view of a population world's live state."""
+    pop = state.population
+    is_metro = np.array([d.kind == "metro" for d in pop.districts])
+    return _dbt_inputs(pop.persons, pop.households, pop.attributes, state.life.helper, is_metro, state.government.bpl)
 
 
 def _names(labels: list[str], index: np.ndarray, missing: np.ndarray | None = None) -> pl.Series:
@@ -257,7 +288,10 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
         pl.DataFrame({"entity_id": b.biller_ids, "kind": ["BILLER"] * NB, "district": [None] * NB,
                       "locality": [None] * NB, "sector": [None] * NB, "category": o.billers,
                       "bank_code": _names(codes, b.biller_bank), "accepts_upi": [None] * NB,
-                      "accepts_card": [None] * NB, "payday": [None] * NB}, schema=org_schema)])
+                      "accepts_card": [None] * NB, "payday": [None] * NB}, schema=org_schema),
+        pl.DataFrame({"entity_id": [state.government.entity_id], "kind": ["GOVERNMENT"], "district": [None],
+                      "locality": [None], "sector": ["public_admin"], "category": [None], "bank_code": [None],
+                      "accepts_upi": [None], "accepts_card": [None], "payday": [None]}, schema=org_schema)])
 
     B = config.banks
     banks = pl.DataFrame({
@@ -297,6 +331,7 @@ def account_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]
     subtype[book.type == T.CASH] = "cash_in_hand"
     subtype[state.bank_vault] = "vault"
     subtype[book.type == T.RESERVE] = "reserve"
+    subtype[book.type == T.GOVERNMENT] = "treasury"
     accounts = pl.DataFrame({
         "account_id": np.arange(len(book), dtype=np.int64),
         "type": pl.Series(np.array(["", "DEPOSIT", "CASH", "RESERVE", "GOVERNMENT"], dtype=object)[book.type].tolist(), dtype=pl.String),

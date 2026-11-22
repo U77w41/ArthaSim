@@ -46,8 +46,25 @@ def pick_banks(u: np.ndarray, is_metro: np.ndarray, params: ParamRegistry, n_ban
     return np.minimum(out, n_banks - 1).astype(np.int64)
 
 
+def bank_payees(has_account: np.ndarray, must_bank: np.ndarray, salaried: np.ndarray, district: np.ndarray,
+                u: np.ndarray) -> np.ndarray:
+    """Give every person in `must_bank` an account while holding each district's number of account holders:
+    each unbanked one takes the place of a banked, non-salaried person outside `must_bank`, lowest `u` first.
+    Where a district runs out of such people, the extra accounts stay."""
+    has = np.asarray(has_account, dtype=bool).copy()
+    must = np.asarray(must_bank, dtype=bool)
+    for d in np.unique(district):
+        here = district == d
+        need = np.flatnonzero(here & must & ~has)
+        donors = np.flatnonzero(here & has & ~salaried & ~must)
+        donors = donors[np.argsort(u[donors], kind="stable")][:need.size]
+        has[donors] = False
+        has[need] = True
+    return has
+
+
 def assign_banking(persons: Persons, attributes: Attributes, orgs: Orgs, districts: Sequence[DistrictMarginals],
-                   config: Config, params: ParamRegistry, seed: int) -> Banking:
+                   config: Config, params: ParamRegistry, seed: int, must_bank: np.ndarray | None = None) -> Banking:
     n, B = len(persons), config.banks
     ids = np.arange(n, dtype=np.int64)
     S = rng.stream_id
@@ -74,6 +91,9 @@ def assign_banking(persons: Persons, attributes: Attributes, orgs: Orgs, distric
     earning = np.isin(persons.life_stage, c.EARNING)
     income = attributes.monthly_income_paise
     has_account = salaried | (u("bank.has") < by_kind("inclusion.account_ownership"))
+    if must_bank is not None:
+        # Every DBT payee has an Aadhaar-seeded account (docs/sources/dbt.md); ownership stays on target.
+        has_account = bank_payees(has_account, must_bank, salaried, persons.district, u("bank.dbt_swap"))
 
     primary = pick_bank("bank.primary", ids, is_metro)
     at_employer = salaried & (u("bank.at_employer") < params.get("inclusion.salary_account_at_employer_bank"))

@@ -28,6 +28,8 @@ def open_accounts(state, params: ParamRegistry, persons: np.ndarray, banks: np.n
     state.deposit_for_cash = np.concatenate([state.deposit_for_cash, np.full(n, -1, dtype=np.int64)])
     state.vault_for_deposit = np.concatenate([state.vault_for_deposit, state.bank_vault[banks]])
     state.bank_of_account = np.concatenate([state.bank_of_account, banks])
+    if state.reserve_for_deposit is not None:
+        state.reserve_for_deposit = np.concatenate([state.reserve_for_deposit, state.bank_reserve[banks]])
     state.withdraw_rail = np.concatenate([state.withdraw_rail, np.full(n, int(Rail.ATM), dtype=np.int64)])
     state.account_opened_on = np.concatenate([state.account_opened_on,
                                               np.full(n, np.datetime64(day, "D"))])
