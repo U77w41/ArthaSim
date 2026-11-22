@@ -21,7 +21,9 @@ def test_store_writes_row_groups_and_bounds_the_queue(tmp_path):
         store.add("payments", "2025-04", f)
     store.flush()
     files = table_files(tmp_path, "payments")
-    assert len(files) == 1 and pq.ParquetFile(files[0]).num_row_groups == 5   # 7,000 rows written whenever 1,000 are queued: 5 x 1,400
+    # 7,000 rows written whenever 1,000 are queued: five complete files of 1,400 rows, in order.
+    assert [f.name for f in files] == [f"part-{i}.parquet" for i in range(5)]
+    assert [pq.ParquetFile(f).metadata.num_rows for f in files] == [1_400] * 5
     assert read_table(tmp_path, "payments").collect().equals(pl.concat(frames))
     assert store.max_queued_rows < 1_000 + 700
 

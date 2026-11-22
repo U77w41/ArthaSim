@@ -99,6 +99,12 @@ From a tier S, 90-day, seed 7 run of `main` (commit 1b5d045) on an Apple M5 with
 
 ### 1. Store: rows written as they come
 
+> **Changed after measurement.** PyArrow's single-threaded writer (approach A) made the simulation about 70% slower at tier S: 16.7 s against 9.8 s for 90 days, in alternating runs. So each chunk of `ROW_GROUP_ROWS` (1,000,000) rows is now written as a complete Polars file, `part-N.parquet`, under a temporary name that is renamed when the file is done. That is approach B, counted in rows rather than days.
+>
+> - Memory is still bounded by the chunk size.
+> - The cost is about five payment files a month at tier S instead of one.
+> - The rest of this section describes the original approach A.
+
 - `Store.add(table, month, frame)` queues a frame. When a table's queued rows reach `ROW_GROUP_ROWS` (a code constant of about 500,000, the builder's to tune), they are written as one row group to that table's open file for the month. A Parquet writer (PyArrow `ParquetWriter`, zstd) stays open per table and month.
 - At the end of a month, and at the end of every `step` or `run` call, all queued rows are written and the files are closed. A later call that lands in the same month opens the next `part-N` file, as today.
 - Memory for queued rows is bounded by `ROW_GROUP_ROWS` per table, not by the month.
