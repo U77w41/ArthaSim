@@ -339,6 +339,75 @@ def _bank_view(run: "Run", asof: Date | None, scope: dict) -> View:
     return view
 
 
+# -- switch -------------------------------------------------------------------------------------------------------
+
+NETWORKS = {"upi": ("UPI_P2M", "UPI_P2P"), "imps": ("IMPS",), "nach": ("NACH_CR",), "card": ("DEBIT_CARD",),
+            "atm": ("ATM",), "aeps": ("AEPS",)}
+
+
+def _switch(view: View, asof: dt.date | None) -> dict[str, str]:
+    src = view.src
+    rails = ", ".join(f"'{r}'" for r in NETWORKS[view.scope["network"]])
+    when = f"and y.settle_ts < {asof_us(asof)}" if asof is not None else ""
+    payments = f"""
+        with acct as ({acct_sql(src)}), h as ({handles_sql(src)})
+        select y.payment_id, {ref_sql('y.payment_id')} as ref, y.settle_ts as ts, {date_sql('y.settle_ts')} as date,
+               y.rail, y.status, y.amount_paise,
+               case when y.rail in ('UPI_P2M', 'UPI_P2P') then coalesce(ph.vpa, ph.account_no)
+                    when y.rail in ('IMPS', 'NACH_CR') then ph.account_no
+                    when y.rail in ('DEBIT_CARD', 'ATM') then coalesce(ph.card_token, ph.account_no)
+                    when y.rail = 'AEPS' then pp.uid_token end as payer_handle,
+               y.payer_bank,
+               case when y.rail in ('UPI_P2M', 'UPI_P2P') then coalesce(eh.vpa, eh.account_no)
+                    when y.rail in ('IMPS', 'NACH_CR') then eh.account_no
+                    when y.rail = 'DEBIT_CARD' then coalesce(eh.terminal, eh.account_no)
+                    when y.rail = 'ATM' then 'ATM' || coalesce(ph.branch, pa.bank_code)
+                    when y.rail = 'AEPS' then 'MATM' || coalesce(ph.branch, pa.bank_code) end as payee_handle,
+               case when y.rail in ('ATM', 'AEPS') then y.payer_bank else y.payee_bank end as payee_bank,
+               case when y.rail in ('UPI_P2M', 'DEBIT_CARD') then {mcc_sql('pe.category')} end as mcc,
+               case when y.rail in ('UPI_P2M', 'UPI_P2P') then ph.device_token end as payer_device_token
+        from {src('payments')} y
+        left join acct pa on pa.account_id = y.payer_account_id
+        left join h ph on ph.account_id = y.payer_account_id
+        left join acct pe on pe.account_id = y.payee_account_id
+        left join h eh on eh.account_id = y.payee_account_id
+        left join {src('persons')} pp on pp.entity_id = pa.holder_entity_id
+        where y.rail in ({rails}) {when}
+        order by y.settle_ts, y.payment_id"""
+    return {"payments": payments}
+
+
+def _switch_view(run: "Run", asof: Date | None, scope: dict) -> View:
+    scope = {"network": "upi", **scope}
+    if set(scope) != {"network"} or scope["network"] not in NETWORKS:
+        raise ValueError(f"the switch view takes network=<one of {', '.join(NETWORKS)}>; got {scope}")
+    return View(run, "switch", scope, asof, _switch, {"payments"})
+
+
+# -- bureau -------------------------------------------------------------------------------------------------------
+
+# A bureau holds files only on people reported by lenders (credit applied for or taken). Nobody borrows until
+# phase 3, so every table is empty; the columns are fixed now so code written against them keeps working.
+_BUREAU = {
+    "consumers": "pan_like VARCHAR, birth_year BIGINT, birth_month BIGINT, sex VARCHAR, district VARCHAR, "
+                 "mobile_token VARCHAR",
+    "tradelines": "pan_like VARCHAR, lender_code VARCHAR, product VARCHAR, month VARCHAR, sanctioned_paise BIGINT, "
+                  "balance_paise BIGINT, dpd BIGINT",
+    "enquiries": "pan_like VARCHAR, lender_code VARCHAR, product VARCHAR, ts BIGINT",
+    "scores": "pan_like VARCHAR, month VARCHAR, score BIGINT",
+}
+
+
+def _bureau(view: View, asof: dt.date | None) -> dict[str, str]:
+    return {t: f"select * from {_empty(cols)}" for t, cols in _BUREAU.items()}
+
+
+def _bureau_view(run: "Run", asof: Date | None, scope: dict) -> View:
+    if scope:
+        raise ValueError(f"the bureau view takes no scope arguments; got {sorted(scope)}")
+    return View(run, "bureau", scope, asof, _bureau, {"tradelines", "scores"})
+
+
 def _truth_view(run: "Run", asof: Date | None, scope: dict) -> View:
     if scope:
         raise ValueError(f"the truth view takes no scope arguments; got {sorted(scope)}")
@@ -346,7 +415,7 @@ def _truth_view(run: "Run", asof: Date | None, scope: dict) -> View:
     return View(run, "truth", scope, asof, _truth, set(FACT_TABLES))
 
 
-_FACTORIES = {"bank": _bank_view, "truth": _truth_view}
+_FACTORIES = {"bank": _bank_view, "switch": _switch_view, "bureau": _bureau_view, "truth": _truth_view}
 
 
 def make_view(run: "Run", kind: str, asof: Date | None = None, **scope) -> View:
