@@ -82,8 +82,12 @@ def main(argv: list[str] | None = None) -> dict:
             "merchants": count("select count(*) as n from orgs where kind = 'MERCHANT'"),
             "accounts": count("select count(*) as n from accounts"),
             "edges_by_type": {int(t): int(n) for t, n in edges.iter_rows()},
-            "unbanked_share": round(count("select count(*) as n from persons where not has_account") / config.persons, 4),
+            "unbanked_share": round(count(
+                "select count(*) as n from entity_state_monthly "
+                "where month = (select max(month) from entity_state_monthly) and not has_account") / config.persons, 4),
         })
+    if m.get("builder") == "population" and "entity_state_monthly" in run.tables():
+        result["life"] = _life_summary(run)
     if m.get("builder") == "population" and "truth_household_monthly" in run.tables():
         result.update(_money_flow_summary(world, run))
     print(json.dumps(result, indent=2))
@@ -102,6 +106,85 @@ _PAYER_PERSON = """
     from payments y
     join accounts a on a.account_id = y.payer_account_id
     join persons p on p.entity_id = a.holder_entity_id"""
+
+# The payer's state in the payment's month (IST).
+_PAYER_STATE = """
+    from payments y
+    join accounts a on a.account_id = y.payer_account_id
+    join entity_state_monthly e on e.entity_id = a.holder_entity_id
+     and e.month = strftime(make_timestamp(y.intent_ts) + interval 330 minute, '%Y-%m')"""
+
+_PANEL_STATE = """
+    case when e.life_stage = 'salaried' then 'regular' when e.life_stage = 'casual' then 'casual'
+         when e.life_stage in ('farm', 'self_employed', 'gig') then case when e.helper then 'helper' else 'own' end
+         when e.life_stage = 'seeking' then 'unemployed' else 'nlf' end"""
+_PANEL_ORDER = ("own", "helper", "regular", "casual", "unemployed", "nlf")
+_WORKING = "('salaried', 'self_employed', 'gig', 'farm', 'casual')"
+
+
+def _life_summary(run) -> dict:
+    """Life-course figures: events, account ownership, rural women's working share, urban quarterly gross
+    flows in the PLFS panel's six states, and funds declines by month and around layoffs."""
+    events = run.sql("""
+        select strftime(date, '%Y-%m') as month, event, count(*) as n from life_events group by 1, 2 order by 1, 2""")
+    by_month: dict = {}
+    for month, event, n in events.iter_rows():
+        by_month.setdefault(month, {})[event] = int(n)
+    ownership = run.sql("select month, avg(case when has_account then 1.0 else 0.0 end) as s "
+                        "from entity_state_monthly group by 1 order by 1")
+    person_kind = """
+        join persons p on p.entity_id = e.entity_id
+        join (select distinct district_id, kind from geo) g on g.district_id = p.district"""
+    working = run.sql(f"""
+        select e.month, p.sex, g.kind,
+               avg(case when e.life_stage in {_WORKING} then 1.0 else 0.0 end) as s
+        from entity_state_monthly e {person_kind}
+        group by 1, 2, 3 order by 1, 2, 3""")
+    working_share = {}
+    for month, sex, kind, s in working.iter_rows():
+        working_share.setdefault(f"{'urban' if kind == 'metro' else 'rural'}_{'female' if sex == 'F' else 'male'}",
+                                 {})[month] = round(s, 4)
+    flows = run.sql(f"""
+        with s as (
+            select e.entity_id, p.sex, g.kind, {_PANEL_STATE} as st,
+                   date_diff('month', date '2025-01-01', strptime(e.month || '-01', '%Y-%m-%d')) as mi
+            from entity_state_monthly e {person_kind})
+        select a.sex, a.st as from_st, b.st as to_st, count(*) as n
+        from s a join s b on a.entity_id = b.entity_id and b.mi = a.mi + 3
+        where a.kind = 'metro'
+        group by 1, 2, 3""")
+    counts: dict = {}
+    for sex, src, dst, n in flows.iter_rows():
+        counts.setdefault(sex, {}).setdefault(src, {})[dst] = int(n)
+    urban_flows = {sex: {src: {dst: round(100 * row.get(dst, 0) / sum(row.values()), 2) for dst in _PANEL_ORDER}
+                         for src in _PANEL_ORDER if (row := rows.get(src))}
+                   for sex, rows in counts.items()}
+    declines = run.sql("""
+        select strftime(make_timestamp(y.intent_ts) + interval 330 minute, '%Y-%m') as month,
+               avg(case when y.status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as s
+        from payments y group by 1 order by 1""")
+    laid_off = run.sql(f"""
+        with l as (select entity_id, strftime(date, '%Y-%m') as month,
+                          strftime(date - interval 1 month, '%Y-%m') as before from life_events
+                   where event = 'LAID_OFF'),
+        y as (select a.holder_entity_id as person, y.status,
+                     strftime(make_timestamp(y.intent_ts) + interval 330 minute, '%Y-%m') as month
+              from payments y join accounts a on a.account_id = y.payer_account_id)
+        select avg(case when y.month = l.month and y.status = 'DECLINED_FUNDS' then 1.0
+                        when y.month = l.month then 0.0 end) as after,
+               avg(case when y.month = l.before and y.status = 'DECLINED_FUNDS' then 1.0
+                        when y.month = l.before then 0.0 end) as before
+        from l join y on y.person = l.entity_id""")
+    after, before = laid_off.row(0)
+    return {
+        "events_by_month": by_month,
+        "account_ownership_by_month": {mo: round(s, 4) for mo, s in ownership.iter_rows()},
+        "working_share_by_month": working_share,
+        "urban_quarterly_flows_pct": urban_flows,
+        "declined_funds_by_month": {mo: round(s, 4) for mo, s in declines.iter_rows()},
+        "declined_funds_laid_off": {"month_of_layoff": round(float(after or 0.0), 4),
+                                    "month_before": round(float(before or 0.0), 4)},
+    }
 
 
 def _money_flow_summary(world, run) -> dict:
@@ -131,8 +214,8 @@ def _money_flow_summary(world, run) -> dict:
         where h.income_paise > 0
         group by 1 order by 1""")
     by_stage = run.sql(f"""
-        select p.life_stage as k, avg(case when y.status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as share
-        {_PAYER_PERSON}
+        select e.life_stage as k, avg(case when y.status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as share
+        {_PAYER_STATE}
         group by 1 order by 2 desc""")
     no_income = run.sql(f"""
         with d as (
@@ -147,10 +230,11 @@ def _money_flow_summary(world, run) -> dict:
             from payments y join accounts b on b.account_id = y.payee_account_id
             where y.purpose = 'ALLOWANCE' and y.status = 'SUCCESS'),
         att as (
-            select p.entity_id as person, y.intent_ts as ts, y.status
+            select e.entity_id as person, y.intent_ts as ts, y.status
             from payments y join accounts a on a.account_id = y.payer_account_id
-            join persons p on p.entity_id = a.holder_entity_id
-            where p.life_stage in ('homemaker', 'studying', 'seeking')
+            join entity_state_monthly e on e.entity_id = a.holder_entity_id
+             and e.month = strftime(make_timestamp(y.intent_ts) + interval 330 minute, '%Y-%m')
+            where e.life_stage in ('homemaker', 'studying', 'seeking')
               and y.purpose not in ('ALLOWANCE', 'CASH_WITHDRAWAL', 'CASH_DEPOSIT')),
         j as (
             select att.status, (att.ts - recv.ts) // 86400000000 as days

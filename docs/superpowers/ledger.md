@@ -243,3 +243,49 @@ Plan: `docs/superpowers/plans/2026-11-20-arthasim-flexible-withdrawal.md`. Spec:
   - allowance rails that follow where the payer's income lands;
   - an allowance withdrawal that is all-or-nothing and sized from the morning's cash;
   - medical bills paid in cash failing about two thirds of the time.
+
+# Plan 1b-2 (life course) execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-21-arthasim-plan-1b2-life-course.md`. Spec: `docs/superpowers/specs/2026-11-21-life-course-design.md` (approved 21 November 2026).
+Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `plan-1b2-life-course` in a git worktree (`.worktrees/`, excluded locally), so the shared checkout never switched branches.
+
+## Tasks
+
+- Task 1 (PLFS sources, 23 registry rows, loader): red (collection error), green 6 passed; whole suite 140 passed. The YAML was transcribed from `docs/sources/` with a throwaway script; the tests pin spot values and every Table 15 column sum.
+- Task 2 (targets): red (import error), green 6 passed (plan: 5; one added for the ends of the age range).
+- Task 3 (alignment): red (import error), green 4 passed (two Hypothesis properties, 60 examples each).
+- Task 4 (synthesis on the start month's targets): red (`TypeError`), green 7 passed with the old population tests; one test added for `fit_report`'s `stage_target`; whole suite 154 passed.
+- Task 5 (transition probabilities): red (import error), green 5 passed.
+- Task 6 (helpers, life state, build): red (import error and the persons columns), green; whole suite 161 passed. `income_for`, `draw_sector` and `pick_banks` checked bit-identical against the previous modules. Slow gates still 3 passed.
+- Task 7 (accounts opened mid-run): red (no `extend`), green 9 passed with the ledger and invariant tests.
+- Task 8 (jobs and pay): red (import error), green 3 passed.
+- Task 9 (`LifeCourse`, events, monthly state, world wiring): red (module list), green 3 passed first run; whole suite 169 passed.
+- Task 10 (gate, bench, results): the 12-month tier S gate passed first run (98.5 s); all four slow gates pass. Bench before (`main`, from a detached scratch checkout) and after, 90 days, and 365 days on the branch. Results in `docs/phase1b2_results.md`.
+
+## Rulings
+
+- Task 1: the data file nests each block's values under `values:` beside `source`, `table`, `pages` and `status`. That keeps the metadata apart from the group keys for validation. Cost if wrong: none outside the YAML layout.
+- Task 2: the plan's test asked for exactly equal shares in June 2026 and June 2025, but the plan also makes the gig share follow the fiscal year. The test now compares the seven other stages, and self-employed plus gig together. Cost if wrong: none; the seasonal path still repeats.
+- Task 2: interpolation follows the spec ("Ages 18–19 take the mean of the 15–19 and 20–24 columns; 65 and over use the 65+ column"), not the plan's knots at 17 and 70. The knots are 19, 22, ..., 62, 65, and the study exits use the same knots. Cost if wrong: studying at 18–19 is about 10 points lower than the plan's version.
+- Task 2 (inherited from the plan): targets are computed at run time from `params/lifecourse/plfs_2025.yaml`, not stored in a `targets.yaml` as the spec says. The numbers are the same. Cost if wrong: none.
+- Task 5: the centring for the not-in-labour-force row leaves out students, whose rows are replaced by the study hazard. Cost if wrong: a small shift in which homemakers and retired people find work.
+- Task 6: `initial_life_state` takes the helper flags as an argument, since helpers must be known before income is zeroed and before banking. Cost if wrong: none.
+- Task 6: the persons table no longer has `life_stage`, so `test_pipeline` checks `birth_month` instead (Task 9 checks stages in `entity_state_monthly`). Cost if wrong: none.
+- Task 6: three tests re-derived for the new population, as the plan allows:
+  - remittances count only senders with income;
+  - income events are checked for earners with income, and helpers get none;
+  - the allowance ordering test forces a same-slot tie, because natural ties (about 1 in 28,800 gifts) no longer occur in April.
+  Cost if wrong: the tie is exercised by construction, not by chance.
+- Task 8: `firm_shock` reads its sigma from the run's registry held by the targets, since the plan's signature has no params. Cost if wrong: none.
+- Task 9: people hired or switching jobs in their employer's raise month skip that month's raise, since their pay was just set. Cost if wrong: about one in twelve of a year's hires misses one raise.
+- Task 9: a hire's or switcher's sector becomes their employer's sector. This matters when no employer exists in the drawn sector and the district fallback applies. Cost if wrong: none.
+- Task 9: someone returning within 12 months gets their previous income only if it was positive (a former helper gets entry pay). Cost if wrong: none.
+- Task 9: a job switch that draws the current employer redraws once. If it is still the same (one employer in the group), there is no switch. Cost if wrong: slightly fewer switches.
+- Task 9: `tests/test_allowance.py` also pins the module list and gains `lifecourse`. Cost if wrong: none.
+
+## Findings
+
+- Funds declines rise from 3.9% to 4.7% of attempts. This is because the PLFS population has more homemakers and fewer pensioners than the placeholders, not because of the monthly moves.
+- A layoff causes no money stress. The budget follows income from the next month and nothing is committed spending. Laid-off people decline less in the month of the layoff (0.4%) than in the month before (1.5%).
+- Helpers come to 30% of PLFS's level (the design expected about 40%), because households are formed without regard to work.
+- Peak memory is about 400 MB higher at tier S (2,094 to 2,501 MB over 90 days). The cause has not been looked into.
