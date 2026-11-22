@@ -13,13 +13,13 @@ Every month, in every one of the 44 cells (2 districts × 2 sexes × 11 five-yea
 | Metric | `main`, 90 days | Branch, 90 days | Branch, 365 days |
 | :--- | ---: | ---: | ---: |
 | Build time | 1.7 s | 1.1 s | 1.0 s |
-| Simulation time | 20.1 s | 19.2 s | 84.2 s |
-| Total, including tables, hashing and manifest | 25.8 s | 23.0 s | 93.0 s |
-| Payment attempts | 15,417,445 | 15,260,636 | 62,137,692 |
-| Payment attempts per second | 767,228 | 796,069 | 737,758 |
-| Peak memory | 2,094 MB | 2,501 MB | 2,573 MB |
+| Simulation time | 20.1 s | 19.6 s | 86.6 s |
+| Total, including tables, hashing and manifest | 25.8 s | 23.4 s | 95.5 s |
+| Payment attempts | 15,417,445 | 15,260,566 | 62,136,003 |
+| Payment attempts per second | 767,228 | 779,038 | 717,580 |
+| Peak memory | 2,094 MB | 2,669 MB | 2,533 MB |
 
-The monthly life-course step adds no measurable time: a full year at tier S takes about a minute and a half, against the 2-hour target. Peak memory is about 400 MB higher, and the cause has not been looked into. It does not grow over the year: 2,501 MB after 90 days, 2,573 MB after 365.
+The monthly life-course step adds no measurable time: a full year at tier S takes about a minute and a half, against the 2-hour target. Peak memory is 2.5 to 2.7 GB against 2.1 GB on `main`, and the cause has not been looked into. It varies from run to run (2,501 and 2,669 MB in two 90-day runs of the branch) and does not grow over the year: 2,533 MB after 365 days.
 
 | Status | `main`, 90 days | Branch, 90 days | Branch, 365 days |
 | :--- | ---: | ---: | ---: |
@@ -73,10 +73,10 @@ Men:
 | From \ to | own | helper | regular | casual | unemployed | nlf |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | own | 97.3 / 97.8 | 0.4 / 0.1 | 0.9 / 1.0 | 0.4 / 0.4 | 0.4 / 0.3 | 0.5 / 0.5 |
-| helper | 3.2 / 7.5 | 94.3 / 87.5 | 0.0 / 0.6 | 0.0 / 1.1 | 0.0 / 1.0 | 2.4 / 2.5 |
+| helper | 3.2 / 7.3 | 94.3 / 87.8 | 0.0 / 0.6 | 0.0 / 0.9 | 0.0 / 1.0 | 2.4 / 2.5 |
 | regular | 0.7 / 1.0 | 0.0 / 0.0 | 97.5 / 97.0 | 0.4 / 0.5 | 1.0 / 0.8 | 0.4 / 0.6 |
-| casual | 1.4 / 1.9 | 0.0 / 0.1 | 1.1 / 1.4 | 91.0 / 91.4 | 4.8 / 3.6 | 1.7 / 1.7 |
-| unemployed | 2.3 / 3.8 | 1.2 / 0.2 | 5.8 / 8.1 | 9.9 / 12.6 | 78.5 / 72.9 | 2.3 / 2.4 |
+| casual | 1.4 / 1.9 | 0.0 / 0.1 | 1.1 / 1.4 | 91.0 / 91.3 | 4.8 / 3.6 | 1.7 / 1.6 |
+| unemployed | 2.3 / 3.8 | 1.2 / 0.1 | 5.8 / 8.1 | 9.9 / 12.6 | 78.5 / 72.9 | 2.3 / 2.4 |
 | nlf | 0.4 / 1.3 | 0.2 / 0.0 | 0.5 / 2.0 | 0.5 / 0.7 | 0.4 / 0.4 | 98.0 / 95.5 |
 
 Women:
@@ -84,10 +84,10 @@ Women:
 | From \ to | own | helper | regular | casual | unemployed | nlf |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: |
 | own | 91.0 / 92.0 | 0.4 / 0.2 | 1.2 / 1.0 | 0.4 / 0.7 | 0.0 / 0.2 | 7.1 / 6.0 |
-| helper | 1.8 / 7.0 | 87.8 / 81.7 | 0.0 / 1.0 | 0.0 / 1.0 | 0.0 / 0.2 | 10.5 / 9.2 |
+| helper | 1.8 / 6.9 | 87.8 / 81.8 | 0.0 / 0.9 | 0.0 / 1.1 | 0.0 / 0.2 | 10.5 / 9.1 |
 | regular | 0.6 / 1.0 | 0.0 / 0.1 | 96.3 / 94.8 | 0.0 / 0.2 | 0.8 / 0.9 | 2.2 / 3.0 |
 | casual | 0.0 / 2.5 | 0.0 / 0.3 | 0.0 / 0.9 | 79.7 / 82.3 | 6.8 / 3.8 | 13.6 / 10.2 |
-| unemployed | 0.0 / 2.1 | 0.0 / 0.0 | 4.7 / 5.6 | 3.5 / 4.5 | 82.4 / 80.4 | 9.4 / 7.5 |
+| unemployed | 0.0 / 2.0 | 0.0 / 0.0 | 4.7 / 5.6 | 3.5 / 4.5 | 82.4 / 80.4 | 9.4 / 7.5 |
 | nlf | 0.4 / 0.9 | 0.3 / 0.1 | 0.4 / 0.6 | 0.2 / 0.3 | 0.2 / 0.2 | 98.4 / 97.9 |
 
 The salaried, own-account and casual rows match within about a point. The simulation has more churn out of unemployment, from helper to own-account, and out of nlf among men. Three things drive that:
@@ -106,13 +106,13 @@ The salaried, own-account and casual rows match within about a point. The simula
 | JOB_SWITCH | 2,302 | 175 to 236 |
 | STARTED_WORK | 6,056 | 229 (May) to 854 (July) |
 | STOPPED_WORK | 5,452 | 289 (November) to 805 (May) |
-| CHANGED_WORK | 6,522 | 476 to 645 |
+| CHANGED_WORK | 6,519 | 476 to 645 |
 | LEFT_STUDY / STARTED_STUDY | 490 / 157 | |
 | STARTED_SEEKING / STOPPED_SEEKING | 285 / 279 | |
 | LEFT_RETIREMENT | 74 | |
-| RAISE | 19,275 | 13,555 on the first day (April raise month) |
+| RAISE | 18,772 | 13,555 on the first day (April raise month) |
 | ACCOUNT_OPENED | 1,684 | 121 to 182 |
-| BECAME_OWN_ACCOUNT / BECAME_HELPER | 347 / 79 | |
+| BECAME_OWN_ACCOUNT / BECAME_HELPER | 343 / 60 | |
 
 Work stops in May and June and restarts in July, the agricultural season the bulletins show. There are on average 19,437 salaried people. Against them:
 
@@ -122,7 +122,7 @@ Work stops in May and June and restarts in July, the agricultural season the bul
 | Layoffs | 4.4% | Aon: 3.4% involuntary |
 | Hires | 16.4% | |
 
-Raises (mean 8.9%) reach almost every salaried person once. People hired or switching jobs in their employer's raise month skip it, since their pay was just set.
+Raises (mean 8.9%) went to 18,772 people, each once. A raise needs 12 months since the last one, and 6 months since a hire or switch set the pay (`life.raise.min_tenure_months`), so a job switch never brings two raises within a year.
 
 ## Accounts
 
@@ -134,7 +134,7 @@ The build makes 1,878 adults unpaid family helpers, 7.1% of the farm and self-em
 
 ## Finding: a layoff does not squeeze spending
 
-The 803 people laid off during the year are younger (28.6 against 37.1 for all salaried), lower paid (₹40,100 against ₹54,200 a month) and newer in their jobs (median 22 against 61 months). Their payments fail for lack of funds 1.5% of the time in the month before the layoff and 0.4% in the month of it. They also make 9% fewer attempts.
+The 803 people laid off during the year are younger (28.6 against 37.1 for all salaried), lower paid (₹40,000 against ₹54,200 a month) and newer in their jobs (median 22 against 61 months). Their payments fail for lack of funds 1.5% of the time in the month before the layoff and 0.4% in the month of it. They also make 9% fewer attempts.
 
 The cause: `Budget` sets each household's spending from its income and balance at the start of every month. When income stops, spending stops with it, and the household lives off its balance. Nothing in the model is committed spending that keeps going after a job loss (rent, loan instalments, school fees). So the moves have no money stress. The higher rate in the month before comes from who gets laid off: young, low-paid, recently hired people with thin balances.
 

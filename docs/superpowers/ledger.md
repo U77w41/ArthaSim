@@ -277,7 +277,7 @@ Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PY
   - the allowance ordering test forces a same-slot tie, because natural ties (about 1 in 28,800 gifts) no longer occur in April.
   Cost if wrong: the tie is exercised by construction, not by chance.
 - Task 8: `firm_shock` reads its sigma from the run's registry held by the targets, since the plan's signature has no params. Cost if wrong: none.
-- Task 9: people hired or switching jobs in their employer's raise month skip that month's raise, since their pay was just set. Cost if wrong: about one in twelve of a year's hires misses one raise.
+- Task 9: people hired or switching jobs in their employer's raise month skip that month's raise, since their pay was just set. Superseded after the final review (below).
 - Task 9: a hire's or switcher's sector becomes their employer's sector. This matters when no employer exists in the drawn sector and the district fallback applies. Cost if wrong: none.
 - Task 9: someone returning within 12 months gets their previous income only if it was positive (a former helper gets entry pay). Cost if wrong: none.
 - Task 9: a job switch that draws the current employer redraws once. If it is still the same (one employer in the group), there is no switch. Cost if wrong: slightly fewer switches.
@@ -288,4 +288,39 @@ Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PY
 - Funds declines rise from 3.9% to 4.7% of attempts. This is because the PLFS population has more homemakers and fewer pensioners than the placeholders, not because of the monthly moves.
 - A layoff causes no money stress. The budget follows income from the next month and nothing is committed spending. Laid-off people decline less in the month of the layoff (0.4%) than in the month before (1.5%).
 - Helpers come to 30% of PLFS's level (the design expected about 40%), because households are formed without regard to work.
-- Peak memory is about 400 MB higher at tier S (2,094 to 2,501 MB over 90 days). The cause has not been looked into.
+- Peak memory is 2.5 to 2.7 GB at tier S, against 2.1 GB on `main` (it varies run to run and does not grow over a year). The cause has not been looked into.
+
+## Final review (plan 1b-2)
+
+A fresh reviewer (Opus) read the whole branch and returned "with fixes": one critical finding, two important and nine minor. It checked the YAML against `docs/sources/` cell by cell, confirmed every cell on target in runs to 2027, and confirmed the person-state invariants month by month.
+
+Fixed, each with a test that failed first; fast suite 174 passed, slow gates 4 passed:
+- **Raking stopped small runs.** The proportional fitting had to converge to 1e-9 within 5,000 iterations. Near the floor it converges very slowly, so worlds of 30 to 500 people, and one of 2,000, stopped with a `ValueError`. `rake` now runs the same steps itself and, after 5,000 iterations, accepts the result if every margin is within half a person; the rounding then makes both margins exact. Tests: the reviewer's three-person repro, a Hypothesis property with exact-zero probabilities and unchanged targets, and a 300-person full year. The reviewer's crash cases (500 people with seeds 1–6; 2,000, 120 and 30 people with seed 7) now all run 365 days.
+  - Ruling: where the fitting converges, the result is the same as before. Cost if wrong: in a rare slow cell the flows come from the last iterate rather than the exact fit.
+- **Helper flips reversed in the same month.** Helper to own-account and own-account to helper shared one draw, so a helper could flip and flip back (56 cases in a test with both rates at 0.5). They now use separate draws, and nobody flips back in the month they became own-account.
+- **Two raises within a year after a switch or a hire.** A raise now needs 12 months since the last one and 6 months since a hire or switch set the pay. The 6 is a new registry row, `life.raise.min_tenure_months` (assumption; 115 rows). This replaces the Task 9 ruling.
+  - Ruling: cost if wrong, a hire can wait up to 6 months longer for a first raise than an employer that pro-rates would make them.
+
+The benches were rerun after the fixes and every figure in `docs/phase1b2_results.md` was re-queried. Raises are now 18,772, each to a different person; helper flips back are 60 instead of 79. The other figures barely moved.
+
+Rulings on behaviour the reviewer set aside:
+- The quarterly agriculture share, which includes agricultural casual and regular workers, shifts the farm stage, as the spec says. Cost if wrong: farm seasonality slightly overstated.
+- The calibration gaps stand as reported findings: helper to own-account churn is 7.3% against 3.2% for urban men, and helpers are 30% of PLFS's level. Calibration is plan 1e.
+- The extra memory stands as reported.
+- People born in the start month do not age until a year later, because the first simulated day runs no ageing; the build's age is read as the age before this year's birthday. Cost if wrong: 1/12 of people are a year younger in the first year and miss superannuation that year.
+- Every move from salaried to seeking is `LAID_OFF`, including quits, as the spec's event table says.
+- Young "retired" people (code 94 includes rentiers and remittance recipients) get the existing pension rule.
+- `choose_movers` fills destinations in index order, as the plan specifies. Cost if wrong: a slight bias for people likely to make several moves.
+- No test compares two full-year runs' hashes. The split-run test and the 1b-1 gate cover determinism.
+
+Deferred minors:
+- `life.prob_bounds` is [0.0003, 0.95] where the spec clips to [0.001, 0.95]. The plan applies the effects per month, so 0.0003 is the monthly equivalent; it changes only who moves.
+- The test for runs past March 2026 checks only the month labels, not targets or ages past 85 (the reviewer checked both by hand).
+- The helper-orphan rule is tested only by "no orphans at the end", not by an orphan being made own-account and paid (the reviewer saw 228 such events at tier S, all paid).
+- The build's alignment floor is a constant, so overriding `life.rake.floor` does not reach the build.
+- `firm_shock` reads its sigma through the targets' registry rather than a `params` argument.
+- `initial_life_state`'s `start` argument is unused, and the months-in-stage cap ignores the education start age the spec mentions.
+- The window for reusing the last salaried sector counts from the last stage change, not from leaving salaried work (matters only past 12 months).
+- `instrument_id` is renumbered at each flush as new accounts add rows mid-table.
+- `rates.py` and `sources.py` import private helpers from other modules.
+
