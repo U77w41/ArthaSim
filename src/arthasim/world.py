@@ -5,7 +5,7 @@ import datetime as dt
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import duckdb
 import numpy as np
@@ -120,6 +120,7 @@ class World:
         self._days = 0
         self._payments = 0
         self._wall = 0.0
+        self._watchers: dict[int, list[Callable[[dict], None]]] = {}
 
     @classmethod
     def build(cls, config: Config, seed: int) -> "World":
@@ -143,6 +144,37 @@ class World:
         """The next day to be simulated."""
         return self._date
 
+    def watch(self, entity_id: int, callback: Callable[[dict], None]) -> None:
+        """Call `callback` after each simulated day on which the entity made or received a payment attempt or had a
+        life event, with that day's payments, events, end-of-day balances and (on a month's first day) its state."""
+        self._watchers.setdefault(int(entity_id), []).append(callback)
+
+    def unwatch(self, entity_id: int) -> None:
+        """Remove every callback watching the entity."""
+        self._watchers.pop(int(entity_id), None)
+
+    def _notify(self, day: dt.date, payments: pl.DataFrame, frames: dict[str, pl.DataFrame]) -> None:
+        book = self.state.book
+        events = frames.get("life_events")
+        states = frames.get("entity_state_monthly")
+        for eid, callbacks in list(self._watchers.items()):
+            accounts = np.flatnonzero(book.holder == eid)
+            mine = accounts.tolist()
+            pay = payments.filter(pl.col("payer_account_id").is_in(mine) | pl.col("payee_account_id").is_in(mine))
+            ev = events.filter(pl.col("entity_id") == eid) if events is not None else None
+            if pay.height == 0 and (ev is None or ev.height == 0):
+                continue
+            payer, payee = pl.col("payer_account_id").is_in(mine), pl.col("payee_account_id").is_in(mine)
+            pay = pay.with_columns(pl.when(payer & payee).then(pl.lit("SELF")).when(payer).then(pl.lit("DR"))
+                                   .otherwise(pl.lit("CR")).alias("direction"))
+            row = states.filter(pl.col("entity_id") == eid) if states is not None else None
+            payload = {"date": day, "entity_id": eid, "payments": pay.to_dicts(),
+                       "events": ev.to_dicts() if ev is not None else [],
+                       "balances": {int(a): int(book.balance[a]) for a in accounts},
+                       "state": row.to_dicts()[0] if row is not None and row.height else None}
+            for callback in list(callbacks):
+                callback(payload)
+
     def step(self, days: int = 1) -> None:
         for _ in range(days):
             self._day()
@@ -164,12 +196,16 @@ class World:
         month = f"{day:%Y-%m}"
         if monthly_ran and self.state.behaviour is not None:
             self._store.add("truth_household_monthly", month, _household_monthly(self.state, month))
+        frames: dict[str, pl.DataFrame] = {}
         for module in self.modules:
             for name, frame in module.tables().items():
                 self._store.add(name, month, frame)
+                frames[name] = frame
         self._store.add("payments", month, payments)
         self._store.add("journal", month, journal)
         self._store.add("postings", month, postings)
+        if self._watchers:
+            self._notify(day, payments, frames)
         self._days += 1
         self._payments += payments.height
         self._date = day + dt.timedelta(days=1)
