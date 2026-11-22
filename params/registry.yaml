@@ -572,3 +572,61 @@
   source: plan 1b-2 assumption (appraisal cycles usually require joining some months before the cycle)
   status: assumption
   role: input
+# Government transfers (plan 1d-1). Every source and derivation is in docs/sources/dbt.md.
+- {id: dbt.pm_kisan.amount_paise, value: 200000, unit: paise per instalment, as_of: 2026-11,
+  source: 'PM-Kisan portal; architecture appendix A dbt.pm_kisan (docs/sources/dbt.md)', status: unverified, role: input}
+- id: dbt.pm_kisan.dates
+  value: ['2025-08-02', '2025-11-19', '2026-03-13', '2026-06-20']
+  unit: release dates (20th to 23rd instalments)
+  as_of: 2026-11
+  source: PIB fact sheets for the 21st to 23rd instalments; Business Today for the 20th (docs/sources/dbt.md)
+  status: unverified
+  role: input
+- {id: dbt.pm_kisan.coverage, value: 0.66, unit: share of eligible households, as_of: 2026-11,
+  source: '9.7 crore families paid Aug 2025 / 14.645 crore operational holdings, Agriculture Census 2015-16 (docs/sources/dbt.md)',
+  status: assumption, role: input}
+- {id: dbt.pm_kisan.pension_exclusion_paise, value: 1000000, unit: paise per month, as_of: 2026-11,
+  source: PM-Kisan operational guidelines, exclusion of pensioners drawing 10000 or more a month, status: unverified,
+  role: input}
+- {id: dbt.taxpayer_income_paise, value: 70000000, unit: paise per year of one person's earned income, as_of: 2026-11,
+  source: 'section 87A rebate limit under the new regime for 2024-25, the year PM-Kisan checks in 2025-26 (docs/sources/dbt.md)',
+  status: assumption, role: input}
+- {id: dbt.old_age.min_age, value: 60, unit: years, as_of: 2026-11, source: 'NSAP IGNOAPS, PIB note November 2025',
+  status: unverified, role: input}
+- id: dbt.old_age.central_paise
+  value: [[60, 20000], [80, 50000]]
+  unit: '[from age, paise per month]'
+  as_of: 2026-11
+  source: NSAP IGNOAPS central assistance, PIB note November 2025 (docs/sources/dbt.md)
+  status: unverified
+  role: input
+- {id: dbt.old_age.state_topup_paise, value: 80000, unit: paise per month, as_of: 2026-11,
+  source: 'state top-ups 50 to 5700 a month, average pension around 1100 in many states, PIB note November 2025 (docs/sources/dbt.md)',
+  status: assumption, role: input}
+- {id: dbt.bpl.headcount, value: {metro: 0.264, rural: 0.309}, unit: share of persons, as_of: 2026-11,
+  source: 'Rangarajan Expert Group (2014) poverty ratios for 2011-12, urban and rural (docs/sources/dbt.md)',
+  status: unverified, role: input}
+- {id: dbt.old_age.coverage, value: 0.5, unit: share of eligible persons, as_of: 2026-11,
+  source: '2.21 crore IGNOAPS beneficiaries / about 4.8 crore poor elderly, rounded up for state schemes (docs/sources/dbt.md)',
+  status: assumption, role: input}
+- {id: dbt.old_age.day, value: 5, unit: day of month, as_of: 2026-11, source: 'states pay on their own calendars; early
+    in the month (docs/sources/dbt.md)', status: assumption, role: input}
+- {id: dbt.women.ages, value: [21, 60], unit: years (inclusive), as_of: 2026-11,
+  source: 'Ladli Behna and Subhadra ages, PRS State of State Finances 2025 Table 6', status: unverified, role: input}
+- id: dbt.women.amount_tiers
+  value: [[100000, 363.2], [125000, 157.8], [150000, 200.8], [200000, 119.2], [210000, 19.8], [250000, 61.6]]
+  unit: '[paise per month, implied beneficiaries in lakh]'
+  as_of: 2026-11
+  source: 'PRS State of State Finances 2025 Table 6: budget 2025-26 BE / (benefit x 12), Odisha left out (docs/sources/dbt.md)'
+  status: assumption
+  role: input
+- {id: dbt.women.income_cap_paise, value: 25000000, unit: paise per year of household earned income, as_of: 2026-11,
+  source: 'Majhi Ladki Bahin eligibility, family income under 2.5 lakh a year', status: unverified, role: input}
+- {id: dbt.women.coverage, value: 0.4, unit: share of eligible women, as_of: 2026-11,
+  source: 'about 12 crore beneficiaries (EAC-PM WP 52/2026) / about 37.5 crore women aged 21-60, over a share under the caps (docs/sources/dbt.md)',
+  status: assumption, role: input}
+- {id: dbt.women.day, value: 10, unit: day of month, as_of: 2026-11, source: 'Ladli Behna credited around the 10th
+    (news reports; docs/sources/dbt.md)', status: assumption, role: input}
+- {id: dbt.slots, value: [24, 39], unit: 'settlement slots, inclusive (06:00 to 09:59)', as_of: 2026-11,
+  source: 'APBS credits are bulk batches seen early in the day; no published time distribution (docs/sources/dbt.md)',
+  status: assumption, role: input}
