@@ -127,12 +127,15 @@ def _truth(view: View, asof: dt.date | None) -> dict[str, str]:
         "postings": f"journal_id in (select journal_id from {src('journal')} where ts < {cut})",
         "life_events": f"date <= {day}",
         "entity_state_monthly": f"month <= '{month}'",
+        "truth_dbt_monthly": f"month <= '{month}'",
         "truth_household_monthly": f"month <= '{month}'",
         "balances_monthly": f"month <= '{month_end(asof)}'",
         "accounts": f"opened_on <= {day}",
         "instruments": f"account_id in (select account_id from {src('accounts')} where opened_on <= {day})",
     }
-    return {t: f"{q} where {where[t]}" if t in where else q for t, q in defs.items()}
+    # The postings and instruments cuts are semi-joins, which DuckDB runs in parallel without keeping file order.
+    order = {"postings": " order by journal_id, line_no", "instruments": " order by instrument_id"}
+    return {t: f"{q} where {where[t]}{order.get(t, '')}" if t in where else q for t, q in defs.items()}
 
 
 # -- column meanings, for the export's data dictionary -----------------------------------------------------------

@@ -59,3 +59,19 @@ def test_run_is_readable_while_running_and_after_an_error(tmp_path):
     after = Run.open(w.path)
     assert after.table("payments").select(pl.len()).collect().item() > seen[0]
     assert not list(Path(w.path).rglob("part-*.parquet.tmp"))
+
+
+def test_truth_view_asof_cut_keeps_file_order():
+    """I3: a cut through a semi-join must still come back in file order, the same every time."""
+    from run_fixture import small_run
+    run = small_run()
+    v = run.view("truth", asof="2025-05-10")
+    a = v.table("postings").collect()
+    b = v.table("postings").collect()
+    assert a.equals(b)
+    keep = set(v.table("journal").collect()["journal_id"].to_list())
+    want = run.table("postings").filter(pl.col("journal_id").is_in(list(keep))).collect()
+    assert a.equals(want)
+    inst = v.table("instruments").collect()
+    assert inst.equals(v.table("instruments").collect())
+    assert inst["instrument_id"].is_sorted()

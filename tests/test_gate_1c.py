@@ -25,6 +25,12 @@ def test_plan_1c_gate(tmp_path):
         assert run.manifest["content_hash"][t] == content_hash(run.path, t), t
     assert not list(Path(run.path, ".spool").glob("*2025-05*"))
 
+    cut = run.view("truth", asof="2025-06-10")
+    first, second = cut.table("postings").collect(), cut.table("postings").collect()
+    keep = cut.table("journal").select("journal_id").collect()["journal_id"]
+    assert first.equals(second) and first.equals(
+        run.table("postings").filter(pl.col("journal_id").is_in(keep.implode())).collect())
+
     v = run.view("bank", bank="SYNB03")
     last = v.sql("""select account_id, month, arg_max(balance_after_paise, line_seq) as b
                     from (select *, strftime(date, '%Y-%m') as month from statement_lines) group by 1, 2""")
