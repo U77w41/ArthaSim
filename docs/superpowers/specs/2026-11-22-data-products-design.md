@@ -132,6 +132,12 @@ Every existing fact table is unchanged. Three dimension tables change, and two t
 - **TERMINAL** is new, one for each card-accepting merchant: a token from stream `id.terminal`.
 - DEVICE, DEBIT_CARD, MOBILE and BRANCH are unchanged.
 
+**Every token is now a keyed one-way hash** (changed after the final review):
+- **What changes.** The VPA, ACCOUNT_NO, customer number and TERMINAL above, and the existing uid, mobile, device and card tokens, are now each a keyed BLAKE2b digest of the id. The key comes from the run seed and the stream.
+- **Why.** The earlier counter-based mix could be inverted to the simulator ID.
+- **What else changes.** The format stays as it was, but the values of `persons.uid_token` and `persons.mobile_token`, and of the DEVICE, DEBIT_CARD and MOBILE instruments, change too.
+- **What stays.** `pan_like` (plan 1a) still encodes the person's place in the population. Re-keying it needs a format-preserving permutation and is left for the release review.
+
 **`accounts`** (changes on purpose):
 
 - It gains `opening_balance_paise`, the balance when the account was opened. With it, the balance at any moment is the last posting's `balance_after_paise`, or the opening balance if there is no earlier posting.
@@ -426,7 +432,9 @@ Test-first, on fast worlds where possible: a few-thousand-person population run 
   - A non-empty `dest` fails.
 - **No change to the simulation.**
   - On a tier S, 90-day, seed 7 run, every fact table and every dimension except `persons`, `accounts` and `instruments` has the same content hash as the manifest of a run of `main`. That is commit 1b5d045, or the `main` tip at merge time if it has moved.
-  - `persons` without `birth_year` and `accounts` without `opening_balance_paise` equal `main`'s.
+  - `accounts` without `opening_balance_paise` equals `main`'s.
+  - `persons` without `birth_year` equals `main`'s, except for the token values, which are now keyed hashes.
+  - The BRANCH instruments equal `main`'s.
 
 Done means the plan's tasks pass test-first, one fresh final review (Opus) has read the whole branch and its findings are fixed, and a results doc (`docs/phase1c_results.md`) shows each call working on a tier S run. That doc reports:
 
