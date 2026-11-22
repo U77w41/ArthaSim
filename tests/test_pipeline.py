@@ -3,7 +3,7 @@ from arthasim import Config, World
 
 TRUTH_ONLY = {"domain_skill", "digital_literacy", "financial_literacy", "risk_appetite",
               "habit_strength", "price_sensitivity", "trust_in_offers"}
-PERSON_COLUMNS = ["entity_id", "household_id", "district", "locality", "sex", "birth_month", "education",
+PERSON_COLUMNS = ["entity_id", "household_id", "district", "locality", "sex", "birth_month", "birth_year", "education",
                   "has_pan", "pan_like", "uid_token", "mobile_token"]
 
 
@@ -25,7 +25,7 @@ def test_population_world_builds_and_runs(tmp_path):
     assert m["days"] == 10 and m["builder"] == "population" and m["districts"] == ["metro_archetype", "rural_archetype"]
     assert abs(m["scale_factor"] - 1000.0) < 1e-9 and m["build_report"]["max_l1"] < 0.05
     assert set(run.tables()) == {"payments", "journal", "postings", "persons", "households", "orgs", "banks",
-                                 "accounts", "instruments", "edges", "geo", "truth_person_latent",
+                                 "accounts", "instruments", "edges", "geo", "truth_person_latent", "bank_customers",
                                  "truth_household_monthly", "life_events", "entity_state_monthly", "truth_dbt_monthly"}
     pay = run.table("payments").collect()
     cash = s.person_cash[unbanked].tolist()
@@ -44,7 +44,8 @@ def test_tables_and_truth_separation(tmp_path):
     latent = run.table("truth_person_latent").collect()
     assert TRUTH_ONLY <= set(latent.columns) and latent.height == 5_000 and latent["month"].unique().to_list() == ["2025-04"]
     assert set(run.table("banks").collect()["kind"].unique()) == {"BANK", "NBFC", "BOUNDARY"}
-    assert set(run.table("instruments").collect()["kind"].unique()) <= {"VPA", "DEBIT_CARD", "DEVICE", "MOBILE", "BRANCH"}
+    assert set(run.table("instruments").collect()["kind"].unique()) == {"VPA", "DEBIT_CARD", "DEVICE", "MOBILE", "BRANCH",
+                                                                     "ACCOUNT_NO", "TERMINAL"}
     assert run.table("households").collect().columns == ["household_id", "district", "locality", "adults",
                                                          "dependants", "head_entity_id"]
     assert run.sql("select count(*) n from edges e join persons p on e.src_entity_id = p.entity_id")["n"][0] \

@@ -38,6 +38,27 @@ def branch_code(bank_index, district_index, locality) -> np.ndarray:
     return np.array([f"SY{b + 1:02d}0{d:02d}{loc:04d}" for b, d, loc in rows], dtype=object)
 
 
-def vpa(entity_id, bank_index) -> np.ndarray:
-    rows = zip(np.asarray(entity_id).tolist(), np.asarray(bank_index).tolist())
-    return np.array([f"p{e}@syn{b + 1:02d}" for e, b in rows], dtype=object)
+def vpa(seed: int, account_ids, bank_index, prefix: str = "p") -> np.ndarray:
+    """Opaque VPA: a token keyed on the account, then the bank. It encodes no simulator ID."""
+    tokens = token(prefix, seed, rng.stream_id("id.vpa"), account_ids)
+    return np.array([f"{t}@syn{b + 1:02d}" for t, b in zip(tokens.tolist(), np.asarray(bank_index).tolist())],
+                    dtype=object)
+
+
+def account_no(seed: int, account_ids, bank_codes) -> np.ndarray:
+    """The bank's own account number: bank code, hyphen, 16 hex digits keyed on the account."""
+    values = rng.bits(seed, rng.stream_id("id.account_no"), np.asarray(account_ids, dtype=np.int64), 0)
+    return np.array([f"{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values.tolist())], dtype=object)
+
+
+def customer_no(seed: int, entity_ids, bank_index, bank_codes) -> np.ndarray:
+    """The bank's own customer number for (bank, entity): CIF, bank code, hyphen, 16 hex digits."""
+    key = np.asarray(entity_ids, dtype=np.int64) * 64 + np.asarray(bank_index, dtype=np.int64)
+    values = rng.bits(seed, rng.stream_id("id.customer_no"), key, 0)
+    return np.array([f"CIF{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values.tolist())],
+                    dtype=object)
+
+
+def terminal(seed: int, account_ids) -> np.ndarray:
+    """A card-accepting merchant's terminal ID, keyed on its account."""
+    return token("t", seed, rng.stream_id("id.terminal"), account_ids)

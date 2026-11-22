@@ -44,10 +44,10 @@ def _registry_path(config: Config) -> Path:
     return Path(__file__).resolve().parents[2] / path
 
 
-def _dimension_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]:
+def _dimension_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl.DataFrame]:
     if state.population is not None:
         from arthasim.build.pipeline import population_frames
-        return population_frames(state, config)
+        return population_frames(state, config, seed)
     return _spike_frames(state, config)
 
 
@@ -130,7 +130,7 @@ class World:
         state = build_state(config, params, seed)
         path.mkdir(parents=True)
         world = cls(config, seed, params, state, path)
-        for name, frame in _dimension_frames(state, config).items():
+        for name, frame in _dimension_frames(state, config, seed).items():
             world._store.write_dimension(name, frame)
         return world
 
@@ -188,7 +188,7 @@ class World:
         if self.state.population is not None:
             # Accounts opened during the run join the accounts and instruments tables.
             from arthasim.build.pipeline import account_frames
-            for name, frame in account_frames(self.state, self.config).items():
+            for name, frame in account_frames(self.state, self.config, self.seed).items():
                 self._store.write_dimension(name, frame)
         manifest: dict[str, Any] = {
             "run_id": self.path.name, "seed": self.seed, "config_hash": self.config.hash(),

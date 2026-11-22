@@ -12,7 +12,7 @@ from arthasim.build.attributes import Attributes, attach_attributes
 from arthasim.build.banking import Banking, assign_banking
 from arthasim.build.graph import build_edges
 from arthasim.build.households import Households, form_households
-from arthasim.build.identifiers import branch_code, pan_like, token, vpa
+from arthasim.build.identifiers import account_no, branch_code, customer_no, pan_like, terminal, token, vpa
 from arthasim.build.marginals import DistrictMarginals, load_district, load_priors
 from arthasim.build.orgs import Orgs, build_orgs
 from arthasim.build.population import Persons, synthesise_persons
@@ -246,7 +246,7 @@ def _nullable(values: np.ndarray, present: np.ndarray, dtype) -> pl.Series:
     return pl.Series(np.where(present, values, None).tolist(), dtype=dtype)
 
 
-def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]:
+def population_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl.DataFrame]:
     """Dimension tables for a population build. Category columns hold names."""
     b: PopulationBundle = state.population
     p, h, a, o, k = b.persons, b.households, b.attributes, b.orgs, b.banking
@@ -261,6 +261,7 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
         "entity_id": state.person_ids, "household_id": hh, "district": _names(district_ids, p.district),
         "locality": locality, "sex": _names(c.SEX, p.sex),
         "birth_month": pl.Series(state.life.birth_month.astype(np.int64), dtype=pl.Int64),
+        "birth_year": pl.Series(_birth_year(p.age, state.life.birth_month, config.start), dtype=pl.Int64),
         "education": _names(c.EDUCATION, p.education), "has_pan": k.person_has_pan,
         "pan_like": _nullable(state.pan_like, k.person_has_pan, pl.String),
         "uid_token": pl.Series(b.tokens["uid"].tolist(), dtype=pl.String),
@@ -301,7 +302,7 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
         "archetype": k.bank_archetype.tolist() + [None] + ["nbfc"] * len(b.nbfc_ids)},
         schema={"entity_id": pl.Int64, "bank_code": pl.String, "kind": pl.String, "archetype": pl.String})
 
-    frames = account_frames(state, config)
+    frames = account_frames(state, config, seed)
 
     edges = b.edges.rename({"src": "src_entity_id", "dst": "dst_entity_id"})
     L = config.localities_per_district
@@ -314,10 +315,18 @@ def population_frames(state: WorldState, config: Config) -> dict[str, pl.DataFra
                            "month": pl.Series([f"{config.start:%Y-%m}"] * len(p), dtype=pl.String),
                            **{name: getattr(a, name) for name in LATENT}})
     return {"persons": persons, "households": households, "orgs": orgs, "banks": banks, "accounts": frames["accounts"],
-            "instruments": frames["instruments"], "edges": edges, "geo": geo, "truth_person_latent": latent}
+            "instruments": frames["instruments"], "edges": edges, "geo": geo, "truth_person_latent": latent,
+            "bank_customers": frames["bank_customers"]}
 
 
-def account_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]:
+def _birth_year(age: np.ndarray, birth_month: np.ndarray, start) -> np.ndarray:
+    """Year of birth from the build age. The life course adds a year in each person's birth month but not on the
+    first simulated day, so their first birthday in the run is the first time their birth month comes round
+    after the start month."""
+    return (start.year - age.astype(np.int64) - (birth_month.astype(np.int64) > start.month)).astype(np.int64)
+
+
+def account_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl.DataFrame]:
     """The accounts and instruments tables from live state: every account so far, with its opening date."""
     b: PopulationBundle = state.population
     p, h, k = b.persons, b.households, b.banking
@@ -338,21 +347,49 @@ def account_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]
         "subtype": pl.Series(subtype.tolist(), dtype=pl.String),
         "holder_entity_id": book.holder, "issuer_entity_id": book.issuer,
         "opened_on": pl.Series(state.account_opened_on, dtype=pl.Date),
-        "status": pl.Series(["ACTIVE"] * len(book), dtype=pl.String)})
+        "status": pl.Series(["ACTIVE"] * len(book), dtype=pl.String),
+        "opening_balance_paise": book.opening.astype(np.int64)})
 
     upi, card, mobile = k.person_upi, k.person_has_card, k.person_has_mobile & banked
     second = b.person_second_deposit >= 0
     parts = [
-        ("VPA", state.person_deposit[upi], vpa(state.person_ids[upi], k.person_primary_bank[upi])),
+        ("VPA", state.person_deposit[upi], vpa(seed, state.person_deposit[upi], k.person_primary_bank[upi])),
         ("DEVICE", state.person_deposit[upi], b.tokens["device"][upi]),
         ("DEBIT_CARD", state.person_deposit[card], b.tokens["card"][card]),
         ("MOBILE", state.person_deposit[mobile], b.tokens["mobile"][mobile]),
         ("BRANCH", state.person_deposit[banked], branch_code(k.person_primary_bank[banked], p.district[banked], locality[banked])),
         ("BRANCH", b.person_second_deposit[second], branch_code(k.person_second_bank[second], p.district[second], locality[second])),
     ]
+    # Handles every deposit account has or that organisations hold (spec section 3).
+    deposits = np.flatnonzero(book.type == T.DEPOSIT)
+    bank = state.bank_of_account
+    codes = state.bank_codes
+    m_upi = state.merchant_deposit[b.orgs.merchant_accepts_upi]
+    m_card = state.merchant_deposit[b.orgs.merchant_accepts_card]
+    parts += [
+        ("ACCOUNT_NO", deposits, account_no(seed, deposits, codes[bank[deposits]])),
+        ("VPA", m_upi, vpa(seed, m_upi, bank[m_upi], prefix="m")),
+        ("VPA", state.biller_deposit, vpa(seed, state.biller_deposit, bank[state.biller_deposit], prefix="b")),
+        ("TERMINAL", m_card, terminal(seed, m_card)),
+    ]
     account_id = np.concatenate([x[1] for x in parts])
     instruments = pl.DataFrame({
         "instrument_id": np.arange(account_id.size, dtype=np.int64), "account_id": account_id,
         "kind": pl.Series([x[0] for x in parts for _ in range(x[1].size)], dtype=pl.String),
         "value": pl.Series([v for x in parts for v in x[2].tolist()], dtype=pl.String)})
-    return {"accounts": accounts, "instruments": instruments}
+    return {"accounts": accounts, "instruments": instruments, "bank_customers": _bank_customers(state, seed)}
+
+
+def _bank_customers(state: WorldState, seed: int) -> pl.DataFrame:
+    """One row per (bank, entity) holding a deposit at that bank; the boundary bank has no customers."""
+    book = state.book
+    deposits = np.flatnonzero(book.type == T.DEPOSIT)
+    holder, bank = book.holder[deposits], state.bank_of_account[deposits]
+    customer_kinds = [EntityKind.PERSON, EntityKind.EMPLOYER, EntityKind.MERCHANT, EntityKind.BILLER]
+    keep = (bank < len(state.bank_codes) - 1) & np.isin(state.kind[holder], customer_kinds)
+    pairs = np.unique(np.stack([bank[keep], holder[keep]], axis=1), axis=0)      # sorted by bank, then entity
+    bank, entity = pairs[:, 0], pairs[:, 1]
+    codes = state.bank_codes[bank]
+    return pl.DataFrame({"bank_code": pl.Series(codes.tolist(), dtype=pl.String), "entity_id": entity,
+                         "customer_no": pl.Series(customer_no(seed, entity, bank, codes).tolist(), dtype=pl.String)},
+                        schema={"bank_code": pl.String, "entity_id": pl.Int64, "customer_no": pl.String})

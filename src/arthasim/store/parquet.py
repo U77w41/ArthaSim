@@ -12,7 +12,7 @@ from arthasim.store.hashing import RunningHash, content_hash, fact_files  # noqa
 FACT_TABLES = ["payments", "journal", "postings", "truth_household_monthly", "life_events",
                "entity_state_monthly", "truth_dbt_monthly"]
 DIM_TABLES = ["persons", "households", "orgs", "banks", "accounts", "instruments", "edges", "geo",
-              "truth_person_latent"]
+              "truth_person_latent", "bank_customers"]
 ROW_GROUP_ROWS = 500_000
 
 

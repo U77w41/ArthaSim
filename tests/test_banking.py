@@ -53,7 +53,10 @@ def test_identifiers_cannot_be_real():
         assert len(set(values)) == (5000 if name != "ifsc" else 60)
     assert all(re.match(r"^SY[0-9]{2}0[0-9]{6}$", v) for v in samples["ifsc"])
     assert all(re.match(r"^SY[0-9]P[A-Z][0-9]{4}[A-Z]$", v) for v in samples["pan"])
-    assert all(v == f"p{i}@syn{(i % 12) + 1:02d}" for i, v in zip(ids.tolist(), vpa(ids, ids % 12)))
+    v = vpa(7, ids, ids % 12)
+    assert all(re.match(r"^p_[0-9a-f]{16}@syn[0-9]{2}$", x) for x in v) and len(set(v)) == 5000
+    assert all(x.endswith(f"@syn{(i % 12) + 1:02d}") for i, x in zip(ids.tolist(), v))
+    assert (v == vpa(7, ids, ids % 12)).all() and not (v == vpa(8, ids, ids % 12)).any()
 
 
 def test_deterministic():
