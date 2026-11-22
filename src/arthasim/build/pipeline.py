@@ -299,7 +299,7 @@ def account_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]
     subtype[book.type == T.RESERVE] = "reserve"
     accounts = pl.DataFrame({
         "account_id": np.arange(len(book), dtype=np.int64),
-        "type": pl.Series(np.array(["", "DEPOSIT", "CASH", "RESERVE"], dtype=object)[book.type].tolist(), dtype=pl.String),
+        "type": pl.Series(np.array(["", "DEPOSIT", "CASH", "RESERVE", "GOVERNMENT"], dtype=object)[book.type].tolist(), dtype=pl.String),
         "subtype": pl.Series(subtype.tolist(), dtype=pl.String),
         "holder_entity_id": book.holder, "issuer_entity_id": book.issuer,
         "opened_on": pl.Series(state.account_opened_on, dtype=pl.Date),

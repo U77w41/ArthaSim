@@ -9,7 +9,7 @@ from numba import njit
 from arthasim.engine.intents import Intents, Purpose, Rail
 
 # Enum values, repeated as plain ints for the compiled loop.
-_PAYMENT, _CASH_PAYMENT, _CASH_WITHDRAWAL, _CASH_DEPOSIT = 1, 2, 3, 5
+_PAYMENT, _CASH_PAYMENT, _CASH_WITHDRAWAL, _CASH_DEPOSIT, _GOVT = 1, 2, 3, 5, 6
 _CASH_CONVERSION = 4
 _UPI_P2M, _UPI_P2P = int(Rail.UPI_P2M), int(Rail.UPI_P2P)
 _SUCCESS, _DECLINED_TECH, _DECLINED_FUNDS, _DECLINED_LIMIT = 1, 2, 3, 4
@@ -53,7 +53,8 @@ def _journal(J, n_j, jid, pid, kind, flow, slot, off):
 
 @njit(cache=True)
 def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, flow, payer, payee, amount,
-            rail, slot, off, purpose, upi_limit, tech_u, tech_rate, wd, note, next_pid, next_jid, P, J, Q):
+            rail, slot, off, purpose, upi_limit, tech_u, tech_rate, wd, note, next_pid, next_jid, P, J, Q,
+            reserve_for_deposit):
     n_p = 0
     n_j = 0
     n_q = 0
@@ -89,7 +90,7 @@ def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, f
                     n_q = _post(Q, n_q, balance, jid, 2, vault, -take)
 
         vault = -1
-        if status == _SUCCESS:
+        if status == _SUCCESS and k != _GOVT:      # the government always pays
             if balance[src] < a:
                 status = _DECLINED_FUNDS
             elif k == _CASH_WITHDRAWAL:
@@ -113,25 +114,37 @@ def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, f
             n_q = _post(Q, n_q, balance, jid, 2, vault, -a)
         elif k == _CASH_DEPOSIT:
             n_q = _post(Q, n_q, balance, jid, 2, vault, a)
+        elif k == _GOVT:
+            n_q = _post(Q, n_q, balance, jid, 2, reserve_for_deposit[dst], a)
     return n_p, n_j, n_q
 
 
 def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.ndarray,
                vault_for_deposit: np.ndarray, intents: Intents, upi_limit: int, tech_u: np.ndarray,
                tech_rate: float, withdrawal_paise: int, next_payment_id: int, next_journal_id: int,
-               withdraw_rail: np.ndarray | None = None, withdrawal_note: int = 1) -> Settled:
+               withdraw_rail: np.ndarray | None = None, withdrawal_note: int = 1,
+               reserve_for_deposit: np.ndarray | None = None) -> Settled:
     """Settle sorted intents in order. Mutates `balance` in place.
 
     `withdraw_rail` gives, per cash account, the rail of an automatic withdrawal (ATM when omitted).
     A cash payment larger than the payer's cash first triggers an automatic withdrawal from their deposit:
     `withdrawal_paise`, or the shortfall rounded up to `withdrawal_note` if that is more, capped at the
     deposit balance rounded down to `withdrawal_note`. It goes ahead only if it covers the shortfall and
-    the bank's vault holds all of it; otherwise nothing is withdrawn and the payment fails for funds."""
+    the bank's vault holds all of it; otherwise nothing is withdrawn and the payment fails for funds.
+
+    A government transfer always succeeds and posts three lines: government balance down, deposit up and
+    the deposit bank's reserves up, found through `reserve_for_deposit` (per account; -1 where none)."""
     if withdrawal_note < 1:
         raise ValueError(f"withdrawal_note must be at least 1 paisa, got {withdrawal_note}")
     n = len(intents)
     if withdraw_rail is None:
         withdraw_rail = np.full(balance.shape[0], int(Rail.ATM), dtype=np.int64)
+    if reserve_for_deposit is None:
+        reserve_for_deposit = np.full(balance.shape[0], -1, dtype=np.int64)
+    reserve_for_deposit = np.ascontiguousarray(reserve_for_deposit, dtype=np.int64)
+    govt = intents.kind == _GOVT
+    if govt.any() and (reserve_for_deposit[intents.payee_acct[govt]] < 0).any():
+        raise ValueError("government transfer to an account with no reserve")
     P = np.empty((2 * n, len(PAYMENT_FIELDS)), dtype=np.int64)
     J = np.empty((2 * n, len(JOURNAL_FIELDS)), dtype=np.int64)
     Q = np.empty((6 * n, len(POSTING_FIELDS)), dtype=np.int64)
@@ -141,7 +154,7 @@ def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.
                             intents.offset_s, intents.purpose, int(upi_limit),
                             np.ascontiguousarray(tech_u, dtype=np.float64), float(tech_rate),
                             int(withdrawal_paise), int(withdrawal_note), int(next_payment_id), int(next_journal_id),
-                            P, J, Q)
+                            P, J, Q, reserve_for_deposit)
 
     def cols(arr: np.ndarray, count: int, names: list[str]) -> dict[str, np.ndarray]:
         return {name: arr[:count, i].copy() for i, name in enumerate(names)}

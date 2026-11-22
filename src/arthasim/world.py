@@ -73,7 +73,7 @@ def _spike_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]:
     banks = pl.DataFrame({"entity_id": state.bank_ids, "bank_code": pl.Series(codes.tolist(), dtype=pl.String),
                           "is_boundary": [c == "SYNX00" for c in codes.tolist()]})
 
-    type_names = np.array(["", "DEPOSIT", "CASH", "RESERVE"], dtype=object)[book.type]
+    type_names = np.array(["", "DEPOSIT", "CASH", "RESERVE", "GOVERNMENT"], dtype=object)[book.type]
     holder_kind = state.kind[book.holder]
     subtype = np.full(len(book), "current", dtype=object)
     subtype[(book.type == T.DEPOSIT) & (holder_kind == EntityKind.PERSON)] = "savings"

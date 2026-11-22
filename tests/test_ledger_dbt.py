@@ -84,3 +84,65 @@ def test_vectorised_shapes_catch_a_reserve_at_the_wrong_bank():
     with pytest.raises(InvariantError) as e:
         _check(b, journal, postings)
     assert e.value.name == "shapes"
+
+
+# --- settlement kernel -------------------------------------------------------------------------
+from arthasim.engine.intents import Intents, Status  # noqa: E402
+from arthasim.engine.settlement import settle_day  # noqa: E402
+
+K_TYPE = np.array([T.GOVERNMENT, T.DEPOSIT, T.RESERVE], dtype=np.int64)
+K_NONE = np.full(3, -1, dtype=np.int64)
+K_RESERVE = np.array([-1, 2, -1], dtype=np.int64)
+
+
+def _govt_intent(amount=2000):
+    one = lambda v: np.array([v], dtype=np.int64)
+    return Intents(one(Kind.GOVERNMENT_TRANSFER), one(FlowType.SOCIAL_BENEFIT), one(0), one(1), one(amount),
+                   one(Rail.APBS), one(30), one(0), one(Purpose.DBT_WOMEN))
+
+
+def test_kernel_posts_three_lines_and_never_declines():
+    bal = np.zeros(3, dtype=np.int64)
+    s = settle_day(bal, K_TYPE, K_NONE, K_NONE, _govt_intent(), 10_000_000, np.zeros(1), 1.0, 200_000, 0, 0,
+                   reserve_for_deposit=K_RESERVE)
+    assert s.payments["status"].tolist() == [Status.SUCCESS]
+    assert s.payments["rail"].tolist() == [Rail.APBS] and s.payments["purpose"].tolist() == [Purpose.DBT_WOMEN]
+    assert s.postings["account_id"].tolist() == [0, 1, 2] and s.postings["delta"].tolist() == [-2000, 2000, 2000]
+    assert bal.tolist() == [-2000, 2000, 2000] and s.journal["kind"].tolist() == [Kind.GOVERNMENT_TRANSFER]
+
+
+def test_missing_reserve_lookup_raises():
+    for lookup in (None, K_NONE):
+        with pytest.raises(ValueError, match="no reserve"):
+            settle_day(np.zeros(3, dtype=np.int64), K_TYPE, K_NONE, K_NONE, _govt_intent(), 10_000_000,
+                       np.ones(1), 0.0, 200_000, 0, 0, reserve_for_deposit=lookup)
+
+
+def test_netting_leaves_government_transfers_alone(tmp_path):
+    from arthasim import Config, World
+    from arthasim.modules.base import BehaviourModule
+
+    world = World.build(Config.tier("S", persons=300, out_dir=str(tmp_path)), seed=7)
+    s = world.state
+    gov = int(s.book.extend(T.GOVERNMENT, [s.boundary_id], [s.central_bank_id], [0])[0])
+    s.posted_total = np.concatenate([s.posted_total, np.zeros(1, dtype=np.int64)])
+    s.bank_of_account = np.concatenate([s.bank_of_account, [-1]])
+    s.account_opened_on = np.concatenate([s.account_opened_on, s.account_opened_on[:1]])
+    lookup = np.full(len(s.book), -1, dtype=np.int64)
+    banked = s.bank_of_account >= 0
+    lookup[np.flatnonzero(banked)] = s.bank_reserve[s.bank_of_account[banked]]
+    s.reserve_for_deposit = lookup
+    dep = int(s.person_deposit[np.flatnonzero(s.person_deposit >= 0)[0]])
+
+    class Stub(BehaviourModule):
+        def intents(self, world, day):
+            one = lambda v: np.array([v], dtype=np.int64)
+            return Intents(one(Kind.GOVERNMENT_TRANSFER), one(FlowType.SOCIAL_BENEFIT), one(gov), one(dep),
+                           one(150_000), one(Rail.APBS), one(24), one(0), one(Purpose.DBT_WOMEN))
+
+    world.modules.append(Stub())
+    world.step(1)          # the bank balance-sheet invariant fails if netting moves these reserves again
+    paid = world.state.book
+    assert int(paid.balance[gov]) == -150_000
+    rows = pl.read_parquet(f"{world.path}/payments/month=2025-04/*.parquet").filter(pl.col("rail") == "APBS")
+    assert rows["status"].to_list() == ["SUCCESS"] and rows["payee_account_id"].to_list() == [dep]

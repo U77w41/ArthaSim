@@ -80,6 +80,7 @@ class WorldState:
     behaviour: Any = None           # BehaviourState
     life: Any = None                # LifeState (population builds)
     account_opened_on: Any = None   # per account, datetime64[D] (population builds)
+    reserve_for_deposit: Any = None  # per account: the issuing bank's reserve account, -1 if none
 
 
 def build_state(config: Config, params: ParamRegistry, seed: int) -> WorldState:
