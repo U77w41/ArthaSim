@@ -324,3 +324,57 @@ Deferred minors:
 - `instrument_id` is renumbered at each flush as new accounts add rows mid-table.
 - `rates.py` and `sources.py` import private helpers from other modules.
 
+
+# Plan 1d-1 (government transfers) execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-22-arthasim-plan-1d1-government-transfers.md`. Spec: `docs/superpowers/specs/2026-11-22-government-transfers-design.md`. Sources: `docs/sources/dbt.md`.
+Run on an Apple M5 with Python 3.12, from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `claude/dazzling-rosalind-a3bd01` in its own git worktree. Executed inline (native), with one fresh Opus review of the whole branch.
+
+The project owner approved the scope, the three schemes, the ledger approach (A) and the behaviour rules, then went offline with a standing instruction: decide everything else the way the real system works, from open data. Those decisions are marked "Decided overnight" in the spec, each with its source and its cost if wrong.
+
+## Tasks
+
+- Task 1 (enums, government balance, journal shape, invariants, flow matrix): red (missing enums), green 9 passed; ledger and invariant tests 22 passed.
+- Task 2 (kernel and scheduler): red (unknown keyword, wrong postings), green; whole suite 186 passed.
+- Task 3 (17 `dbt.` registry rows, scheme rules): red (import error), green 13 passed; a second row-count pin (`tests/test_life_sources.py`) moved to 132; whole suite 194 passed.
+- Task 4 (government entity, BPL list, payees banked at build by a swap, frames): red (import error), green 6 passed; whole suite 200 passed.
+- Task 5 (`GovernmentTransfers`, `truth_dbt_monthly`, `entity_state_monthly` written after the monthly hooks): red (module order), green 8 passed; tests pinning the module order and the table set updated; whole suite 208 passed.
+- Task 6 (budgets and allowances count transfers; `transfer_income_paise`): red, green; whole suite 211 passed.
+- Task 7 (bench figures, slow gate `tests/test_gate_1d1.py`): red (KeyError `dbt`), green; gate passed in 48 s; all five slow gates passed in 141 s.
+- Task 8: benches before (`main` at `1b5d045`, exported with `git archive`) and after, 90 and 365 days; every figure re-queried with one script; `docs/phase1d1_results.md`.
+
+## Rulings
+
+- Task 2: the accounts table's type-name list gained GOVERNMENT in Task 2 rather than Task 4, because a world holding a government account cannot write its tables without it. Cost if wrong: none.
+- The build's swap draw is named `bank.dbt_swap`, as the plan's Task 4 says, although the spec's Randomness section says DBT streams start with `dbt.`. It is a banking-stage draw in `build/banking.py`, and renaming it changes seeded output. Cost if wrong: a naming inconsistency only.
+- Rulings on the reviewer's "declined to judge" list:
+  - **Account −1 for other kinds.** A payment of any other kind posted to account −1 also wraps to the last account. This predates the plan, and callers guard it.
+  - **Budgeting from the 1st.** Budgets count a month's DBT value from the 1st, although credits land later or every four months. The spec decided this.
+  - **Mid-month starts.** A run that starts after a pay day budgets that month's transfer though no credit lands. This follows from the no-arrears rule.
+  - **Early allowances.** Allowance payers whose surplus comes from DBT may pay before their credit lands: 6 of 38,633, none declined.
+  - **Ownership drift.** Ownership rises a quarter point a year through DBT openings. The spec allows openings during the run.
+  - **Pay-day overrides.** A pay-day override above 28 skips short months. The registry values are 5 and 10.
+  - **Technical-decline keys.** Technical declines are keyed on account id, so the government balance's id shifts the draws for accounts opened later. This predates the plan; at coverage 0, one payment in 381,938 changes outcome against `main`.
+
+## Findings
+
+- Funds declines fall from 4.72% to 4.13% of attempts over 90 days, and from 4.65% to 3.87% over a year.
+- Households with no earned income decline 36.3% of the time over 90 days, down from 45.1%, and 60.1% over the year, down from 72.3%. Their share of all funds declines falls over 90 days but stays at 69% over the year, because DBT lowers everyone else's declines by about as much.
+- The women's transfer reaches 9.9% of women aged 21–60, against about 32% in India. Simulated incomes run high, so only a quarter of women are under the ₹2.5 lakh cap. Plan 1e calibrates incomes.
+- A third of simulated people aged 60+ are "retired" with a contributory pension, against 8.6% in LASI. This leaves fewer elderly people for the social pension (11.2% enrolled).
+- Allowances fall by only ₹0.97 crore a year against ₹6.64 crore paid to women, because a transfer also raises the household budget and each member's need.
+
+## Final review (plan 1d-1)
+
+A fresh reviewer (Opus) read the whole branch, ran the fast suite and the new gate, checked each Review Focus item by experiment, and compared the branch at coverage 0 with `main`. Verdict: "with fixes". There was no critical finding, one important finding and six minor ones.
+
+**Fixed**, with a test that failed first: the government-transfer guard. A payee of −1 wrapped to the last account, a deposit with a valid reserve, and the invariants could not see it. The guard now checks that both accounts exist, that the payer is the government balance and the payee a deposit, and that the reserve lookup covers every account. A government transfer is also exempt from the UPI limit and technical declines on any rail. Tests: five bad-account cases and a UPI-rail case. Suite 218 passed. The bench's content hashes are unchanged.
+
+**Deferred minors:**
+- At coverage 0 the run is not identical to `main` (one payment in 381,938; see the technical-decline ruling above). The plan's Review Focus 5 overstated it.
+- The build banks 67 payees (tier S) who lose eligibility after April's raises. This is recorded in the results doc.
+- `entity_state_monthly` is built after day one settles, not just after the monthly hooks. The result is the same today, but the comment in `life/events.py` still says "start of the month".
+- Test gaps:
+  - the tiny-world swap test does not assert that a district ran short;
+  - no in-run test checks that coverage and the women's tier stay with the same people;
+  - no PM-Kisan age-tie test.
