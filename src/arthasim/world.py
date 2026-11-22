@@ -177,6 +177,12 @@ class World:
             self._store.flush()
         self._wall += time.perf_counter() - started
 
+    def _content_hashes(self) -> dict[str, str]:
+        """Fact tables from the store's live hashes; dimension tables from disk."""
+        live = self._store.content_hashes()
+        return {t: live[t] if t in live else content_hash(self.path, t)
+                for t in FACT_TABLES + DIM_TABLES if table_files(self.path, t)}
+
     def _flush(self) -> None:
         self._store.flush()
         if self.state.population is not None:
@@ -190,8 +196,8 @@ class World:
             "tier": self.config.tier_name, "start": self.config.start.isoformat(),
             "end": (self._date - dt.timedelta(days=1)).isoformat() if self._days else None,
             "days": self._days, "payments": self._payments, "wall_seconds": round(self._wall, 3),
-            "content_hash": {t: content_hash(self.path, t)
-                             for t in FACT_TABLES + DIM_TABLES if table_files(self.path, t)},
+            "content_hash": self._content_hashes(),
+            "polars_version": pl.__version__,
         }
         manifest["builder"] = self.config.builder
         if self.state.population is not None:
