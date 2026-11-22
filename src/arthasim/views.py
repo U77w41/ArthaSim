@@ -303,7 +303,8 @@ def lines_sql(src: Source, accounts: str, cut: int | None, truth: bool = False) 
         with acct as ({acct_sql(src)}), h as ({handles_sql(src)}),
         l as (select p.account_id, p.journal_id, p.line_no, p.delta_paise, p.balance_after_paise, j.ts, j.payment_id
               from {src('postings')} p join {src('journal')} j using (journal_id)
-              where p.account_id in ({accounts}) {when})
+              where p.account_id in ({accounts}) {when}),
+        y as (select * from {src('payments')} where payment_id in (select payment_id from l))
         select l.account_id, oh.account_no, own.holder_entity_id as entity_id, {customer}
                l.ts, {date_sql('l.ts')} as date,
                row_number() over (partition by l.account_id order by l.ts, l.journal_id, l.line_no) as line_seq,
@@ -314,7 +315,7 @@ def lines_sql(src: Source, accounts: str, cut: int | None, truth: bool = False) 
         from l
         join acct own on own.account_id = l.account_id
         left join h oh on oh.account_id = l.account_id
-        left join {src('payments')} y on y.payment_id = l.payment_id
+        left join y on y.payment_id = l.payment_id
         left join acct oth on oth.account_id = case when {payer} then y.payee_account_id else y.payer_account_id end
         left join h xh on xh.account_id = oth.account_id
         {customer_join}

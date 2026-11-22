@@ -1,4 +1,6 @@
 import json
+
+import duckdb
 from pathlib import Path
 
 import polars as pl
@@ -7,7 +9,7 @@ import pytest
 from arthasim import Config, World
 from arthasim.export import is_id
 from arthasim.store.hashing import content_hash
-from arthasim.views import asof_us
+from arthasim.views import Source, asof_us, lines_sql
 
 
 @pytest.mark.slow
@@ -52,6 +54,12 @@ def test_plan_1c_gate(tmp_path):
         assert not [c for c in got.collect_schema().names() if is_id(c)], t
         assert got.select(pl.len()).collect().item() == meta["rows"] == \
             v.table(t).select(pl.len()).collect().item(), t
+
+    # One person's statement lines fit in 300 MB without spilling (they join only their own payments).
+    src = Source(run.path)
+    capped = duckdb.connect(config={"memory_limit": "300MB", "max_temp_directory_size": "0B"})
+    mine = f"select account_id from {src('accounts')} where holder_entity_id = {eid}"
+    assert capped.sql(lines_sql(src, mine, None, truth=True)).pl().height > 0
 
     accounts = ", ".join(map(str, run.sql(f"select account_id from accounts where holder_entity_id = {eid}")
                                 ["account_id"].to_list()))

@@ -75,3 +75,39 @@ def test_truth_view_asof_cut_keeps_file_order():
     inst = v.table("instruments").collect()
     assert inst.equals(v.table("instruments").collect())
     assert inst["instrument_id"].is_sorted()
+
+
+class _Counting:
+    """A DuckDB connection that records every statement it runs."""
+
+    def __init__(self, con):
+        self._con, self.statements = con, []
+
+    def sql(self, q, *a, **kw):
+        self.statements.append(q)
+        return self._con.sql(q, *a, **kw)
+
+    def execute(self, q, *a, **kw):
+        self.statements.append(q)
+        return self._con.execute(q, *a, **kw)
+
+    def __getattr__(self, name):
+        return getattr(self._con, name)
+
+
+def test_export_reads_each_table_once(tmp_path, monkeypatch):
+    """I4: each view table's query runs once; months are copied from that one result."""
+    import duckdb
+    import arthasim.export as export
+    from run_fixture import small_run
+    made = []
+    real = duckdb.connect
+
+    def connect(*a, **kw):
+        made.append(_Counting(real(*a, **kw)))
+        return made[-1]
+
+    monkeypatch.setattr(export.duckdb, "connect", connect)
+    small_run().export(tmp_path / "x", view="bank", bank="SYNB03")
+    reads = [q for c in made for q in c.statements if "read_parquet(" in q]
+    assert len(reads) == 6                                     # one per bank-view table

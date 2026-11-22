@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -54,28 +55,34 @@ def _copy_truth(run: "Run", dest: Path) -> dict[str, dict[str, Any]]:
 
 def _export_table(con: duckdb.DuckDBPyConnection, definition: str, name: str, fact: bool, drop_ids: bool,
                   dest: Path) -> dict[str, Any]:
-    rel = con.sql(f"select * from ({definition}) limit 0")
+    """Build the table once (in an on-disk database, so it can spill), then copy it out, one file per month for
+    fact tables. Copies read the built table in its insertion order, which is the definition's order."""
+    con.execute(f"create or replace table _export as {definition}")
+    rel = con.sql("select * from _export limit 0")
     columns = [(c, str(t)) for c, t in zip(rel.columns, rel.types)]
     keep = [(c, t) for c, t in columns if not (drop_ids and is_id(c))]
     names = [c for c, _ in keep]
-    rows = con.sql(f"select count(*) from ({definition})").fetchall()[0][0]
+    rows = con.sql("select count(*) from _export").fetchall()[0][0]
     month_of = "month" if "month" in names else "strftime(date, '%Y-%m')" if "date" in names else None
-    if fact and rows and month_of is not None:
-        out = [c for c in names if c != "month"]
-        listing = ", ".join(f'"{c}"' for c in out)
-        months = [r[0] for r in con.sql(f"select distinct {month_of} from ({definition}) order by 1").fetchall()]
-        for m in months:
-            folder = dest / name / f"month={m}"
-            folder.mkdir(parents=True)
-            con.execute(f"""copy (select {listing} from ({definition}) where {month_of} = '{m}')
-                            to '{folder / 'part-0.parquet'}' (format parquet, compression zstd)""")
-        return {"rows": rows, "layout": "month", "columns": [[c, t] for c, t in keep if c != "month"],
-                "content_hash": content_hash(dest, name, fact=True)}
-    listing = ", ".join(f'"{c}"' for c in names)
-    con.execute(f"""copy (select {listing} from ({definition}))
-                    to '{dest / f'{name}.parquet'}' (format parquet, compression zstd)""")
-    return {"rows": rows, "layout": "file", "columns": [[c, t] for c, t in keep],
-            "content_hash": content_hash(dest, name, fact=False)}
+    try:
+        if fact and rows and month_of is not None:
+            out = [c for c in names if c != "month"]
+            listing = ", ".join(f'"{c}"' for c in out)
+            months = [r[0] for r in con.sql(f"select distinct {month_of} from _export order by 1").fetchall()]
+            for m in months:
+                folder = dest / name / f"month={m}"
+                folder.mkdir(parents=True)
+                con.execute(f"""copy (select {listing} from _export where {month_of} = '{m}')
+                                to '{folder / 'part-0.parquet'}' (format parquet, compression zstd)""")
+            return {"rows": rows, "layout": "month", "columns": [[c, t] for c, t in keep if c != "month"],
+                    "content_hash": content_hash(dest, name, fact=True)}
+        listing = ", ".join(f'"{c}"' for c in names)
+        con.execute(f"""copy (select {listing} from _export)
+                        to '{dest / f'{name}.parquet'}' (format parquet, compression zstd)""")
+        return {"rows": rows, "layout": "file", "columns": [[c, t] for c, t in keep],
+                "content_hash": content_hash(dest, name, fact=False)}
+    finally:
+        con.execute("drop table _export")
 
 
 def _readme(view: View, run: "Run", tables: dict[str, dict[str, Any]], asof: str | None) -> str:
@@ -106,9 +113,13 @@ def export_view(run: "Run", dest: str | Path, view: str = "bank", asof: Date | N
     if view == "truth":
         tables = _copy_truth(run, dest)
     else:
-        con = duckdb.connect()
         defs = v._definitions()
-        tables = {t: _export_table(con, defs[t], t, t in v.fact_tables, True, dest) for t in sorted(defs)}
+        with tempfile.TemporaryDirectory(prefix="arthasim-export-") as scratch:
+            con = duckdb.connect(str(Path(scratch) / "export.duckdb"))
+            try:
+                tables = {t: _export_table(con, defs[t], t, t in v.fact_tables, True, dest) for t in sorted(defs)}
+            finally:
+                con.close()
     manifest = {"source_run_id": run.manifest["run_id"], "source_content_hash": run.manifest["content_hash"],
                 "view": view, "scope": v.scope, "asof": asof_text, "tables": tables}
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
