@@ -100,7 +100,9 @@ _GROUPS = {
                  "OTHER", "UTILITIES", "TELECOM", "MEDICAL"),
     "cash": ("CASH_WITHDRAWAL", "CASH_DEPOSIT"),
     "transfers": ("ALLOWANCE",),
+    "government": ("DBT_PM_KISAN", "DBT_OLD_AGE_PENSION", "DBT_WOMEN"),
 }
+_SCHEME_OF_PURPOSE = {"DBT_PM_KISAN": "PM_KISAN", "DBT_OLD_AGE_PENSION": "OLD_AGE_PENSION", "DBT_WOMEN": "WOMEN"}
 
 _PAYER_PERSON = """
     from payments y
@@ -243,6 +245,17 @@ def _money_flow_summary(world, run) -> dict:
                     when days < 30 then '25-29' else '30+' end as k,
                avg(case when status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as share
         from j group by 1 order by 1""")
+    no_income_rate = run.sql(f"""
+        with a as (
+            select p.household_id, y.status,
+                   strftime(make_timestamp(y.intent_ts) + interval 330 minute, '%Y-%m') as month
+            {_PAYER_PERSON})
+        select avg(case when a.status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) as rate
+        from a join truth_household_monthly h on h.household_id = a.household_id and h.month = a.month
+        where h.income_paise = 0""")
+    no_income_households = run.sql("""
+        select month, sum(case when income_paise = 0 then 1 else 0 end) as n
+        from truth_household_monthly group by 1 order by 1""")
     s, book = world.state, world.state.book
     cash = book.type == T.CASH
     held = lambda accounts: int(book.balance[accounts].sum()) / 100
@@ -255,6 +268,8 @@ def _money_flow_summary(world, run) -> dict:
             "select rail, avg(case when status = 'DECLINED_FUNDS' then 1.0 else 0.0 end) from payments "
             "group by 1 order by 1").iter_rows()},
         "declined_funds_no_income_households": round(float(no_income["share"][0] or 0.0), 4),
+        "declined_funds_rate_no_income_households": round(float(no_income_rate["rate"][0] or 0.0), 4),
+        "no_income_households_by_month": {mo: int(n) for mo, n in no_income_households.iter_rows()},
         "recipient_declined_by_days_since_allowance": {k: round(v, 4) for k, v in by_days.iter_rows()},
         "allowance_scaled_households": _scaled_households(world),
         "allowance_margin_short_households": _margin_short_households(world),
@@ -262,6 +277,43 @@ def _money_flow_summary(world, run) -> dict:
             "persons": held(s.person_cash), "merchants": held(s.merchant_cash), "billers": held(s.biller_cash),
             "bank_vaults": held(s.bank_vault), "boundary": held([s.boundary_cash]),
             "total": int(book.balance[cash].sum()) / 100},
+        **_dbt_summary(world, run),
+    }
+
+
+def _dbt_summary(world, run) -> dict:
+    """Government transfers: credits, rupees and beneficiaries by scheme; the government's balance; accounts
+    opened for DBT; and, in the last month, the share of women aged 21-60, of people aged 60+ and of
+    households with an own-account farmer who are enrolled."""
+    gov = world.state.government
+    if gov is None or "truth_dbt_monthly" not in run.tables():
+        return {}
+    dbt = {scheme: {"credits": 0, "rupees": 0.0, "beneficiaries": 0} for scheme in _SCHEME_OF_PURPOSE.values()}
+    paid = run.sql("""
+        select purpose, count(*) as credits, sum(amount_paise) as paise, count(distinct payee_account_id) as people
+        from payments where purpose like 'DBT_%' and status = 'SUCCESS' group by 1""")
+    for purpose, credits, paise, people in paid.iter_rows():
+        dbt[_SCHEME_OF_PURPOSE[purpose]] = {"credits": int(credits), "rupees": int(paise) / 100,
+                                            "beneficiaries": int(people)}
+    last = run.sql("select max(month) as m from entity_state_monthly")["m"][0]
+    share = run.sql(f"""
+        with e as (select e.entity_id, e.age, e.life_stage, e.helper, p.sex, p.household_id
+                   from entity_state_monthly e join persons p using (entity_id) where e.month = '{last}'),
+        t as (select entity_id, scheme from truth_dbt_monthly where month = '{last}' and enrolled)
+        select
+          (select count(*) from t where scheme = 'WOMEN') * 1.0
+            / (select count(*) from e where sex = 'F' and age between 21 and 60) as women_21_60,
+          (select count(*) from t where scheme = 'OLD_AGE_PENSION') * 1.0
+            / (select count(*) from e where age >= 60) as aged_60_plus,
+          (select count(*) from t where scheme = 'PM_KISAN') * 1.0
+            / (select count(distinct household_id) from e where life_stage = 'farm' and not helper)
+            as farm_households""")
+    opened = run.sql("select count(distinct entity_id) as n from truth_dbt_monthly where opened_account")["n"][0]
+    return {
+        "dbt": dbt,
+        "government_balance_rupees": int(world.state.book.balance[gov.balance_account]) / 100,
+        "dbt_accounts_opened": int(opened),
+        "dbt_enrolled_share": {k: round(float(v or 0.0), 4) for k, v in zip(share.columns, share.row(0))},
     }
 
 

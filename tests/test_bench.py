@@ -23,3 +23,20 @@ def test_set_rejects_values_that_are_not_finite():
     for raw in ("nan", ".nan", "inf", "-.inf", "Infinity"):
         with pytest.raises(argparse.ArgumentTypeError, match="finite"):
             bench.parse_set(f"transfer.allowance_margin={raw}")
+
+
+def test_money_flow_summary_reports_dbt_and_no_income_declines(tmp_path):
+    from arthasim import Config, World
+    world = World.build(Config.tier("S", persons=2_000, out_dir=str(tmp_path)), seed=7)
+    run = world.run(until="2025-05-10")
+    out = bench._money_flow_summary(world, run)
+    dbt = out["dbt"]
+    assert set(dbt) == {"PM_KISAN", "OLD_AGE_PENSION", "WOMEN"} and dbt["PM_KISAN"]["credits"] == 0
+    assert dbt["WOMEN"]["credits"] > 0 and dbt["WOMEN"]["beneficiaries"] <= dbt["WOMEN"]["credits"]
+    paid = sum(v["rupees"] for v in dbt.values())
+    assert out["government_balance_rupees"] == -paid and out["purpose_group_share"]["government"] > 0
+    assert out["dbt_accounts_opened"] >= 0
+    assert set(out["dbt_enrolled_share"]) == {"women_21_60", "aged_60_plus", "farm_households"}
+    assert 0 < out["dbt_enrolled_share"]["women_21_60"] < 1
+    assert 0 <= out["declined_funds_rate_no_income_households"] <= 1
+    assert list(out["no_income_households_by_month"]) == ["2025-04", "2025-05"]
