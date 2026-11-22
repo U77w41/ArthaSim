@@ -135,6 +135,74 @@ def _truth(view: View, asof: dt.date | None) -> dict[str, str]:
     return {t: f"{q} where {where[t]}" if t in where else q for t, q in defs.items()}
 
 
+# -- column meanings, for the export's data dictionary -----------------------------------------------------------
+
+_ACCOUNT = "The simulator's account ID (Python views only; an export drops it)."
+_ENTITY = "The simulator's entity ID of the customer (Python views only; an export drops it)."
+_PAYMENT = "The simulator's payment ID (Python views only; an export drops it)."
+DESCRIPTIONS: dict[str, dict[str, str]] = {
+    "customers": {
+        "entity_id": _ENTITY, "customer_no": "The bank's own customer number.",
+        "kind": "PERSON, or the organisation's kind (EMPLOYER, MERCHANT, BILLER).",
+        "sex": "F or M (persons).", "birth_year": "Year of birth (persons).", "birth_month": "Month of birth, 1-12 (persons).",
+        "district": "District of the customer's address.", "locality": "Locality within the district.",
+        "has_pan": "Whether the customer gave a PAN.", "pan_like": "PAN-shaped identifier; cannot be a real PAN.",
+        "mobile_token": "Opaque token standing for the registered mobile number.",
+        "sector": "Employer's sector (organisations).", "category": "Merchant or biller category (organisations).",
+    },
+    "accounts": {
+        "account_id": _ACCOUNT, "account_no": "The bank's own account number.", "entity_id": _ENTITY,
+        "customer_no": "The bank's own customer number of the holder.",
+        "subtype": "savings, basic, current or boundary.", "opened_on": "Date the account was opened.",
+        "status": "ACTIVE.", "opening_balance_paise": "Balance when the account was opened, in paise.",
+    },
+    "instruments": {
+        "account_id": _ACCOUNT, "account_no": "The bank's own account number.",
+        "kind": "VPA, ACCOUNT_NO, DEBIT_CARD, DEVICE, MOBILE, BRANCH or TERMINAL.",
+        "value": "The handle or token (opaque; cannot match a real format).",
+    },
+    "payments": {
+        "payment_id": _PAYMENT, "ref": "12-digit reference number shared by every party to the payment, as a UPI RRN.",
+        "ts": "Settlement time, epoch microseconds.", "date": "Settlement date, Asia/Kolkata.",
+        "rail": "UPI_P2M, UPI_P2P, IMPS, NEFT, NACH_CR, DEBIT_CARD, ATM, AEPS or BRANCH.",
+        "status": "SUCCESS, DECLINED_TECH, DECLINED_FUNDS or DECLINED_LIMIT.", "amount_paise": "Amount in paise.",
+        "direction": "DR when the bank's customer pays, CR when they receive.",
+        "account_id": _ACCOUNT, "account_no": "The bank's own account number on this side.", "entity_id": _ENTITY,
+        "customer_no": "The bank's own customer number on this side.",
+        "counterparty_handle": "What the bank sees of the other side: VPA, account number, terminal or branch.",
+        "counterparty_bank": "Bank code of the other side (the bank itself for ATM, AePS and branch).",
+        "mcc": "Merchant category code of the payee (UPI_P2M and card).",
+        "device_token": "The customer's device token when they pay by UPI.",
+        "payer_handle": "Payer's VPA, account number, card token or Aadhaar token (AePS).",
+        "payer_bank": "Payer's bank code.", "payee_handle": "Payee's VPA, account number, terminal or ATM ID.",
+        "payee_bank": "Payee's bank code (the payer's bank for ATM and AePS).",
+        "payer_device_token": "Payer's device token (UPI).",
+    },
+    "statement_lines": {
+        "account_id": _ACCOUNT, "account_no": "The bank's own account number.", "entity_id": _ENTITY,
+        "customer_no": "The bank's own customer number.", "ts": "Posting time, epoch microseconds.",
+        "date": "Posting date, Asia/Kolkata.", "line_seq": "Serial number of the line on this account's statement.",
+        "payment_id": _PAYMENT, "ref": "12-digit reference number of the payment.", "rail": "Rail of the payment.",
+        "direction": "DR (debit) or CR (credit).", "amount_paise": "Amount in paise.",
+        "balance_after_paise": "Running balance after the line, in paise.",
+        "counterparty_handle": "What the bank sees of the other side.", "counterparty_bank": "Bank code of the other side.",
+        "narration": "Statement narration: rail/direction/reference/other side, and the payer's remark on NACH credits.",
+    },
+    "balances_monthly": {
+        "account_id": _ACCOUNT, "account_no": "The bank's own account number.", "month": "Month, YYYY-MM.",
+        "balance_paise": "Closing balance at the end of the month, in paise.",
+    },
+    "consumers": {"pan_like": "PAN-shaped identifier.", "birth_year": "Year of birth.", "birth_month": "Month of birth.",
+                  "sex": "F or M.", "district": "District of address.", "mobile_token": "Mobile number token."},
+    "tradelines": {"pan_like": "Borrower's PAN-shaped identifier.", "lender_code": "Reporting lender.",
+                   "product": "Credit product.", "month": "Reporting month.", "sanctioned_paise": "Sanctioned amount.",
+                   "balance_paise": "Outstanding balance.", "dpd": "Days past due."},
+    "enquiries": {"pan_like": "Applicant's PAN-shaped identifier.", "lender_code": "Enquiring lender.",
+                  "product": "Credit product applied for.", "ts": "Enquiry time, epoch microseconds."},
+    "scores": {"pan_like": "PAN-shaped identifier.", "month": "Month.", "score": "Bureau score."},
+}
+
+
 # -- handles, narration and statement lines (shared by the bank view, the switch view and the inspector) -----------
 
 # Merchant category codes (ISO 18245; checked against Citi's published list of Visa and Mastercard codes).
@@ -288,7 +356,12 @@ def _bank(view: View, asof: dt.date | None) -> dict[str, str]:
         left join {src('bank_customers')} c on c.bank_code = a.bank_code and c.entity_id = a.holder_entity_id
         where a.account_id in ({own})
         order by a.account_id"""
-    instruments = f"select * from {src('instruments')} where account_id in ({own}) order by instrument_id"
+    instruments = f"""
+        with h as ({handles_sql(src)})
+        select i.account_id, h.account_no, i.kind, i.value
+        from {src('instruments')} i left join h using (account_id)
+        where i.account_id in ({own})
+        order by i.account_id, i.kind, i.value"""
     when = f"and y.settle_ts < {cut}" if cut is not None else ""
     payer = "s.direction = 'DR'"
     payments = f"""

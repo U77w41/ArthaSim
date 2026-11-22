@@ -280,6 +280,12 @@ class Run:
         from arthasim.metrics import run_metric
         return run_metric(self, name_or_fn, **kwargs)
 
+    def export(self, dest: str | Path, view: str = "bank", asof: Date | None = None, **scope: Any) -> Path:
+        """Write a view to Parquet under `dest`, with a manifest and a data dictionary. Observer views drop every
+        simulator ID; a bank export carries the bank's own customer and account numbers."""
+        from arthasim.export import export_view
+        return export_view(self, dest, view=view, asof=asof, **scope)
+
     def sql(self, query: str) -> pl.DataFrame:
         con = duckdb.connect()
         for t in self.tables():
