@@ -60,10 +60,20 @@ class RunningHash:
             self._h.update(schema_bytes(frame.schema))
             self._dir.mkdir(parents=True, exist_ok=True)
             self._spool = open(self._spool_path(month), "wb")
+        elif self._spool is None:
+            raise ValueError(f"{self._name}: month {month} is already closed")
         elif frame.schema != self._schema:
             raise ValueError(f"{self._name}: schema changed within {month}")
         self._h.update(frame.hash_rows(seed=0).to_numpy().tobytes())
         self._spool.write(frame.hash_rows(seed=1).to_numpy().tobytes())
+
+    @property
+    def month(self) -> str | None:
+        return self._month
+
+    def close_month(self) -> None:
+        """Fold the open month's spool into the hash and delete it; no more rows may come for that month."""
+        self._close_month()
 
     def _close_month(self) -> None:
         if self._spool is None:

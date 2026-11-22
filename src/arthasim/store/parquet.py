@@ -10,7 +10,7 @@ import pyarrow.parquet as pq
 from arthasim.store.hashing import RunningHash, content_hash, fact_files  # noqa: F401  (content_hash re-exported)
 
 FACT_TABLES = ["payments", "journal", "postings", "truth_household_monthly", "life_events",
-               "entity_state_monthly", "truth_dbt_monthly"]
+               "entity_state_monthly", "truth_dbt_monthly", "balances_monthly"]
 DIM_TABLES = ["persons", "households", "orgs", "banks", "accounts", "instruments", "edges", "geo",
               "truth_person_latent", "bank_customers"]
 ROW_GROUP_ROWS = 500_000
@@ -73,6 +73,13 @@ class Store:
         """Write every queued row and close every open file."""
         for table in list(set(self._queue) | set(self._writer)):
             self._close(table)
+
+    def end_month(self, month: str) -> None:
+        """The month is over: close its files and fold every table's spool for it into the running hash."""
+        self.flush()
+        for h in self._hash.values():
+            if h.month == month:
+                h.close_month()
 
     def content_hashes(self) -> dict[str, str]:
         """Live content hashes of the fact tables written so far."""

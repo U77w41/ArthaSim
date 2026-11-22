@@ -174,7 +174,13 @@ class World:
         self._payments += payments.height
         self._date = day + dt.timedelta(days=1)
         if self._date.month != day.month:
-            self._store.flush()
+            # The month just ended: every account's closing balance.
+            book = self.state.book
+            self._store.add("balances_monthly", month, pl.DataFrame({
+                "account_id": np.arange(len(book), dtype=np.int64),
+                "month": pl.Series([month] * len(book), dtype=pl.String),
+                "balance_paise": book.balance.copy()}))
+            self._store.end_month(month)
         self._wall += time.perf_counter() - started
 
     def _content_hashes(self) -> dict[str, str]:
