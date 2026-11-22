@@ -68,3 +68,31 @@ def test_mid_month_start_split_run_and_outside_window(tmp_path):
     assert one.manifest["content_hash"] == two.manifest["content_hash"]
     late = World.build(cfg(tmp_path / "c", start="2026-03-20"), seed=7).run(until="2026-05-05")
     assert late.table("entity_state_monthly").collect()["month"].unique().sort().to_list() == ["2026-03", "2026-04", "2026-05"]
+
+
+def test_small_world_runs_a_full_year(tmp_path):
+    # Tiny cells make raking converge slowly near the floor; that must not stop the run.
+    run = World.build(cfg(tmp_path, persons=300), seed=7).run(until="2026-03-31")
+    assert run.manifest["days"] == 365
+
+
+def test_helper_flips_never_reverse_in_the_same_month(tmp_path):
+    rates = {"life.within.helper_to_own": 0.5, "life.within.own_to_helper": 0.5}
+    run = World.build(cfg(tmp_path).with_params(**rates), seed=7).run(until="2025-06-30")
+    ev = run.table("life_events").collect()
+    own = ev.filter(pl.col("event") == "BECAME_OWN_ACCOUNT").select("entity_id", "date")
+    helper = ev.filter(pl.col("event") == "BECAME_HELPER").select("entity_id", "date")
+    assert own.height > 0 and helper.height > 0
+    assert own.join(helper, on=["entity_id", "date"]).height == 0
+
+
+def test_raises_come_once_a_year_and_not_soon_after_joining(tmp_path):
+    run = World.build(cfg(tmp_path).with_params(**{"life.switch.monthly_prob": 0.2}), seed=7).run(until="2025-12-31")
+    ev = (run.table("life_events").collect()
+          .with_columns((pl.col("date").dt.year() * 12 + pl.col("date").dt.month()).alias("m")))
+    raises = ev.filter(pl.col("event") == "RAISE").sort(["entity_id", "m"])
+    gaps = raises.with_columns((pl.col("m") - pl.col("m").shift(1).over("entity_id")).alias("gap"))["gap"].drop_nulls()
+    assert raises.height > 0 and (gaps >= 12).all()
+    joined = ev.filter(pl.col("event").is_in(["HIRED", "JOB_SWITCH"])).select("entity_id", pl.col("m").alias("j"))
+    after = raises.join(joined, on="entity_id").filter((pl.col("m") >= pl.col("j")) & (pl.col("m") - pl.col("j") < 6))
+    assert joined.height > 0 and after.height == 0

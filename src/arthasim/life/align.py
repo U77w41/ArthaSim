@@ -7,14 +7,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from arthasim.build.ipf import ipf
-
 N_STAGES = 9
+RAKE_TOL = 1e-9          # stop once every margin is this close
+RAKE_MAX_ITER = 5000
+RAKE_ACCEPT = 0.5        # after the last iteration, a margin within half a person is close enough to round
 
 
 def rake(expected: np.ndarray, rows: np.ndarray, cols: np.ndarray, allowed: np.ndarray, floor: float) -> np.ndarray:
     """Expected flows raked to row totals `rows` (current counts) and column totals `cols` (targets).
-    Allowed cells of rows with people get at least `floor * rows[i]`, so every allowed target is reachable."""
+    Allowed cells of rows with people get at least `floor * rows[i]`, so every allowed target is reachable.
+
+    Iterative proportional fitting, rows then columns, as `build.ipf.ipf` does. Near the floor it can
+    converge very slowly, so after `RAKE_MAX_ITER` iterations the iterate is accepted when every margin is
+    within half a person: `round_flows` then makes both margins exact. Raises `ValueError` only when a
+    target cannot be reached or the margins stay further apart."""
     rows = np.asarray(rows, dtype=np.float64)
     cols = np.asarray(cols, dtype=np.float64)
     if rows.sum() != cols.sum():
@@ -23,7 +29,21 @@ def rake(expected: np.ndarray, rows: np.ndarray, cols: np.ndarray, allowed: np.n
         return np.zeros((rows.size, cols.size))
     seed = np.where(allowed, np.maximum(np.asarray(expected, dtype=np.float64), floor * rows[:, None]), 0.0)
     seed[rows == 0] = 0.0
-    return ipf(seed, [((0,), rows), ((1,), cols)], tol=1e-9, max_iter=5000)
+    if ((seed.sum(axis=1) == 0) & (rows > 0)).any() or ((seed.sum(axis=0) == 0) & (cols > 0)).any():
+        raise ValueError("a target or a current stage has no allowed flow")
+    w = seed * (rows.sum() / seed.sum())
+    gap = np.inf
+    for _ in range(RAKE_MAX_ITER):
+        r = w.sum(axis=1)
+        w *= np.divide(rows, r, out=np.zeros_like(r), where=r > 0)[:, None]
+        k = w.sum(axis=0)
+        w *= np.divide(cols, k, out=np.zeros_like(k), where=k > 0)[None, :]
+        gap = max(np.abs(w.sum(axis=1) - rows).max(), np.abs(w.sum(axis=0) - cols).max())
+        if gap < RAKE_TOL:
+            return w
+    if gap < RAKE_ACCEPT:
+        return w
+    raise ValueError(f"raking left a margin {gap:.3f} people from its target")
 
 
 def round_flows(flows: np.ndarray, rows: np.ndarray, cols: np.ndarray, allowed: np.ndarray) -> np.ndarray:

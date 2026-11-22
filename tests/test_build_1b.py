@@ -22,7 +22,7 @@ def test_new_accounts_lookups_and_state():
     households = len(b.households.adults)
     for name in ("income", "balance", "budget", "medical_due", "buffer_months", "stress"):
         assert getattr(s.behaviour, name).shape == (households,)
-    assert s.behaviour.person_budget.shape == (5_000,) and P.table().height == 114 and P.get("cash.withdrawal_note_paise") == 10_000
+    assert s.behaviour.person_budget.shape == (5_000,) and P.table().height == 115 and P.get("cash.withdrawal_note_paise") == 10_000
 
 
 def test_spike_world_has_none_of_this(tmp_path):

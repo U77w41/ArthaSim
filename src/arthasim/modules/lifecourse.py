@@ -18,6 +18,7 @@ from arthasim.life.helpers import HELPER_STAGES, assign_helpers, orphaned
 from arthasim.life.jobs import (choose_employers, entry_income, firm_shock, raise_due, raised_pay,
                                 recompute_payroll, switch_pay)
 from arthasim.life.rates import RateInputs, person_probs, study_exit
+from arthasim.life.state import month_index
 from arthasim.modules.base import BehaviourModule
 
 
@@ -39,7 +40,7 @@ class LifeCourse(BehaviourModule):
         log = EventLog()
         cycle = _Cycle(world, first)
         if world.days_simulated == 0:
-            cycle.raises(log, exclude=np.zeros(len(s.person_ids), dtype=bool))
+            cycle.raises(log)
             recompute_payroll(s)
         else:
             cycle.run(log)
@@ -53,7 +54,7 @@ class _Cycle:
 
     def __init__(self, world, first: dt.date) -> None:
         self.world, self.s, self.params, self.seed = world, world.state, world.params, world.seed
-        self.month, self.key = first, first.toordinal()
+        self.month, self.key, self.m = first, first.toordinal(), month_index(first)
         pop = self.s.population
         self.pop, self.life, self.p, self.a = pop, self.s.life, pop.persons, pop.attributes
         self.hh = pop.households.household_of_person
@@ -131,13 +132,13 @@ class _Cycle:
 
         # 5. Movers.
         moved = new != stage
-        hired_or_switched = self.movers(log, stage, new, moved)
+        self.movers(log, stage, new, moved)
 
         # 6. Helpers without a family business become own-account; flips between helper and own-account.
         self.helpers(log, moved)
 
         # 7. Job switches for salaried stayers.
-        hired_or_switched |= self.switches(log, moved)
+        self.switches(log, moved)
 
         # 8. Voluntary account opening.
         unbanked = np.flatnonzero(s.person_deposit < 0)
@@ -145,19 +146,18 @@ class _Cycle:
         self.open(log, go, pick_banks(self.u("life.open", 1)[go], self.is_metro[go], params, self.n_banks))
 
         # 9. Raises, payroll and durations.
-        self.raises(log, exclude=hired_or_switched)
+        self.raises(log)
         recompute_payroll(s)
         life.months_in_stage[:] = np.where(moved, 1, life.months_in_stage + 1)
         stayed_since = ~moved & (life.last_stage >= 0)
         life.months_since_left[stayed_since] += 1
 
-    def movers(self, log: EventLog, stage: np.ndarray, new: np.ndarray, moved: np.ndarray) -> np.ndarray:
+    def movers(self, log: EventLog, stage: np.ndarray, new: np.ndarray, moved: np.ndarray) -> None:
         s, p, a, life, params = self.s, self.p, self.a, self.life, self.params
         emp = s.person_employer
         mv = np.flatnonzero(moved)
-        hired = np.zeros(len(p), dtype=bool)
         if mv.size == 0:
-            return hired
+            return
         window = int(params.get("life.return.window_months"))
         old_income, old_emp = a.monthly_income_paise[mv].copy(), emp[mv].copy()
         old_sector = a.sector[mv].astype(np.int64)
@@ -184,7 +184,7 @@ class _Cycle:
             who = mv[to_sal]
             emp[who] = choose_employers(s, who, sector[to_sal], self.u("life.employer")[who])
             sector[to_sal] = self.pop.orgs.employer_sector[emp[who]]
-            hired[who] = True
+            life.pay_set[who] = self.m
         a.sector[mv] = sector
 
         candidate = np.zeros(len(p), dtype=bool)
@@ -212,7 +212,6 @@ class _Cycle:
             banks = np.where(at_employer, s.employer_bank[emp[unbanked]],
                              pick_banks(self.u("life.bank", 1)[unbanked], self.is_metro[unbanked], params, self.n_banks))
             self.open(log, unbanked, banks)
-        return hired
 
     def helpers(self, log: EventLog, moved: np.ndarray) -> None:
         p, a, life, params = self.p, self.a, self.life, self.params
@@ -239,10 +238,13 @@ class _Cycle:
                     income_after=income)
 
         # An own-account worker becomes a helper only if the household keeps another own-account member.
+        # Its own draw, and not for anyone who became own-account this month.
         owner = np.isin(stage, HELPER_STAGES) & ~life.helper
         key = self.hh * 9 + stage
         owners = np.bincount(key[owner], minlength=int(key.max()) + 1)
-        cand = stay & owner & (flip < float(params.get("life.within.own_to_helper"))) & (owners[key] >= 2)
+        stay[to_own] = False
+        back = self.u("life.flip", 1)
+        cand = stay & owner & (back < float(params.get("life.within.own_to_helper"))) & (owners[key] >= 2)
         flips = np.bincount(key[cand], minlength=owners.size)
         cand &= flips[key] < owners[key]
         to_helper = np.flatnonzero(cand)
@@ -252,15 +254,14 @@ class _Cycle:
             self.set_income(to_helper, np.zeros(to_helper.size, dtype=np.int64))
             log.add(self.s.person_ids[to_helper], "BECAME_HELPER", income_before=before, income_after=0)
 
-    def switches(self, log: EventLog, moved: np.ndarray) -> np.ndarray:
+    def switches(self, log: EventLog, moved: np.ndarray) -> None:
         s, p, a, params = self.s, self.p, self.a, self.params
         emp = s.person_employer
-        switched = np.zeros(len(p), dtype=bool)
         young = params.get("life.switch.young")
         prob = float(params.get("life.switch.monthly_prob")) * np.where(p.age < young["age"], young["multiplier"], 1.0)
         who = np.flatnonzero(~moved & (p.life_stage == c.SALARIED) & (self.u("life.switch") < prob))
         if who.size == 0:
-            return switched
+            return
         same = self.u("life.switch_sector")[who] < float(params.get("life.switch.same_sector_prob"))
         drawn = draw_sector(np.full(who.size, c.SALARIED), self.is_metro[who], self.u("life.switch_sector", 1)[who],
                             params)
@@ -273,16 +274,15 @@ class _Cycle:
         ok = new_emp != emp[who]
         who, new_emp = who[ok], new_emp[ok]
         if who.size == 0:
-            return switched
+            return
         old_emp, old_pay = emp[who].copy(), s.person_salary[who].copy()
         pay = switch_pay(old_pay, self.z("life.switch_pay")[who], params)
         emp[who] = new_emp
         a.sector[who] = self.pop.orgs.employer_sector[new_emp]
+        self.life.pay_set[who] = self.m
         self.set_income(who, pay)
-        switched[who] = True
         log.add(s.person_ids[who], "JOB_SWITCH", employer_from=self.employer_entity(old_emp),
                 employer_to=self.employer_entity(new_emp), income_before=old_pay, income_after=pay)
-        return switched
 
     def open(self, log: EventLog, who: np.ndarray, banks: np.ndarray) -> None:
         if who.size == 0:
@@ -291,12 +291,16 @@ class _Cycle:
         income = self.a.monthly_income_paise[who]
         log.add(self.s.person_ids[who], "ACCOUNT_OPENED", income_before=income, income_after=income, account_id=ids)
 
-    def raises(self, log: EventLog, exclude: np.ndarray) -> None:
-        s = self.s
+    def raises(self, log: EventLog) -> None:
+        """Raises in the employer's raise month, at most once in 12 months, and only after
+        `life.raise.min_tenure_months` since the pay was set by a hire or a switch."""
+        s, life = self.s, self.life
         due = raise_due(s, self.month)
-        due = due[~exclude[due]]
+        tenure = int(self.params.get("life.raise.min_tenure_months"))
+        due = due[(self.m - life.last_raise[due] >= 12) & (self.m - life.pay_set[due] >= tenure)]
         if due.size == 0:
             return
+        life.last_raise[due] = self.m
         old = s.person_salary[due].copy()
         pay = raised_pay(old, self.z("life.raise")[due], self.params)
         self.set_income(due, pay)

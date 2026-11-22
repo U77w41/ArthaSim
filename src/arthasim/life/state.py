@@ -14,6 +14,11 @@ from arthasim.params import ParamRegistry
 
 NO_STAGE = -1
 NEVER_LEFT = 9999
+NO_MONTH = -9999
+
+
+def month_index(month: dt.date) -> int:
+    return month.year * 12 + month.month - 1
 
 
 @dataclass
@@ -27,6 +32,8 @@ class LifeState:
     helper: np.ndarray             # bool
     raise_month: np.ndarray        # int8 per employer, 1-12
     targets: Targets
+    last_raise: np.ndarray = None  # int32 month index (year * 12 + month - 1) of the last raise, -9999 none
+    pay_set: np.ndarray = None     # int32 month index when pay was last set by a hire or a switch, -9999 none
     next_event_id: int = 0
 
 
@@ -58,4 +65,5 @@ def initial_life_state(persons, households, attributes, orgs, targets: Targets, 
                      months_since_left=np.full(n, NEVER_LEFT, dtype=np.int32),
                      last_income=np.zeros(n, dtype=np.int64), last_sector=np.full(n, -1, dtype=np.int8),
                      helper=np.asarray(helper, dtype=bool).copy(), raise_month=raise_month.astype(np.int8),
-                     targets=targets)
+                     targets=targets, last_raise=np.full(n, NO_MONTH, dtype=np.int32),
+                     pay_set=np.full(n, NO_MONTH, dtype=np.int32))

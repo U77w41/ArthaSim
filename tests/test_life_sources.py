@@ -35,4 +35,4 @@ def test_categories_and_registry():
     assert c.age_group(np.array([18, 19, 20, 34, 35, 64, 65, 90])).tolist() == [0, 0, 1, 3, 4, 9, 10, 10]
     assert c.SECTORS[c.PUBLIC_ADMIN] == "public_admin"
     assert P.get("life.raise.mean") == 0.089 and P.get("inclusion.account_ownership") == {"metro": 0.89, "rural": 0.89}
-    assert P.table().height == 114
+    assert P.table().height == 115

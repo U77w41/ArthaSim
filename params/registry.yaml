@@ -565,3 +565,10 @@
   source: plan 1b-2 assumption
   status: assumption
   role: input
+- id: life.raise.min_tenure_months
+  value: 6
+  unit: months
+  as_of: 2026-11
+  source: plan 1b-2 assumption (appraisal cycles usually require joining some months before the cycle)
+  status: assumption
+  role: input
