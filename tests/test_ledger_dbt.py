@@ -146,3 +146,32 @@ def test_netting_leaves_government_transfers_alone(tmp_path):
     assert int(paid.balance[gov]) == -150_000
     rows = pl.read_parquet(f"{world.path}/payments/month=2025-04/*.parquet").filter(pl.col("rail") == "APBS")
     assert rows["status"].to_list() == ["SUCCESS"] and rows["payee_account_id"].to_list() == [dep]
+
+
+# accounts: 0 government, 1 deposit, 2 reserve, 3 a second deposit at the same bank (so -1 wraps to a deposit)
+G_TYPE = np.array([T.GOVERNMENT, T.DEPOSIT, T.RESERVE, T.DEPOSIT], dtype=np.int64)
+G_NONE = np.full(4, -1, dtype=np.int64)
+G_RESERVE = np.array([-1, 2, -1, 2], dtype=np.int64)
+
+
+def _govt(payer, payee, rail=Rail.APBS):
+    one = lambda v: np.array([v], dtype=np.int64)
+    return Intents(one(Kind.GOVERNMENT_TRANSFER), one(FlowType.SOCIAL_BENEFIT), one(payer), one(payee), one(500),
+                   one(rail), one(30), one(0), one(Purpose.DBT_WOMEN))
+
+
+@pytest.mark.parametrize("payer,payee,reserve", [(0, -1, G_RESERVE), (0, 4, G_RESERVE), (1, 3, G_RESERVE),
+                                                 (0, 2, np.array([-1, 2, 2, 2])), (0, 1, G_RESERVE[:3])])
+def test_government_transfer_with_a_bad_account_raises(payer, payee, reserve):
+    bal = np.array([0, 100, 1000, 0], dtype=np.int64)
+    with pytest.raises(ValueError):
+        settle_day(bal, G_TYPE, G_NONE, G_NONE, _govt(payer, payee), 10_000_000, np.ones(1), 0.0, 200_000, 0, 0,
+                   reserve_for_deposit=reserve)
+    assert bal.tolist() == [0, 100, 1000, 0]
+
+
+def test_government_transfer_on_a_upi_rail_still_never_declines():
+    bal = np.zeros(4, dtype=np.int64)
+    s = settle_day(bal, G_TYPE, G_NONE, G_NONE, _govt(0, 3, rail=Rail.UPI_P2P), 100, np.zeros(1), 1.0, 200_000, 0, 0,
+                   reserve_for_deposit=G_RESERVE)
+    assert s.payments["status"].tolist() == [Status.SUCCESS] and bal.tolist() == [-500, 0, 500, 500]

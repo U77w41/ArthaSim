@@ -7,6 +7,7 @@ import numpy as np
 from numba import njit
 
 from arthasim.engine.intents import Intents, Purpose, Rail
+from arthasim.ledger.instruments import InstrumentType
 
 # Enum values, repeated as plain ints for the compiled loop.
 _PAYMENT, _CASH_PAYMENT, _CASH_WITHDRAWAL, _CASH_DEPOSIT, _GOVT = 1, 2, 3, 5, 6
@@ -64,7 +65,7 @@ def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, f
         src = payer[i]
         dst = payee[i]
         status = _SUCCESS
-        if rail[i] == _UPI_P2M or rail[i] == _UPI_P2P:
+        if k != _GOVT and (rail[i] == _UPI_P2M or rail[i] == _UPI_P2P):
             if a > upi_limit:
                 status = _DECLINED_LIMIT
             elif tech_u[i] < tech_rate:
@@ -119,6 +120,24 @@ def _settle(balance, deposit_for_cash, vault_for_deposit, withdraw_rail, kind, f
     return n_p, n_j, n_q
 
 
+def _check_government_transfers(intents: Intents, acct_type: np.ndarray, reserve_for_deposit: np.ndarray,
+                                n_accounts: int) -> None:
+    """A government transfer goes from the government balance to an existing deposit whose bank's reserve is
+    known. Checked before the kernel runs: the kernel would wrap an index of -1 to the last account."""
+    govt = intents.kind == _GOVT
+    if not govt.any():
+        return
+    if reserve_for_deposit.shape[0] != n_accounts:
+        raise ValueError("reserve_for_deposit must have one entry per account")
+    payer, payee = intents.payer_acct[govt], intents.payee_acct[govt]
+    if ((payer < 0) | (payer >= n_accounts) | (payee < 0) | (payee >= n_accounts)).any():
+        raise ValueError("government transfer to or from an account that does not exist")
+    if ((acct_type[payer] != InstrumentType.GOVERNMENT) | (acct_type[payee] != InstrumentType.DEPOSIT)).any():
+        raise ValueError("a government transfer must go from the government balance to a deposit")
+    if (reserve_for_deposit[payee] < 0).any():
+        raise ValueError("government transfer to an account with no reserve")
+
+
 def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.ndarray,
                vault_for_deposit: np.ndarray, intents: Intents, upi_limit: int, tech_u: np.ndarray,
                tech_rate: float, withdrawal_paise: int, next_payment_id: int, next_journal_id: int,
@@ -142,9 +161,7 @@ def settle_day(balance: np.ndarray, acct_type: np.ndarray, deposit_for_cash: np.
     if reserve_for_deposit is None:
         reserve_for_deposit = np.full(balance.shape[0], -1, dtype=np.int64)
     reserve_for_deposit = np.ascontiguousarray(reserve_for_deposit, dtype=np.int64)
-    govt = intents.kind == _GOVT
-    if govt.any() and (reserve_for_deposit[intents.payee_acct[govt]] < 0).any():
-        raise ValueError("government transfer to an account with no reserve")
+    _check_government_transfers(intents, acct_type, reserve_for_deposit, balance.shape[0])
     P = np.empty((2 * n, len(PAYMENT_FIELDS)), dtype=np.int64)
     J = np.empty((2 * n, len(JOURNAL_FIELDS)), dtype=np.int64)
     Q = np.empty((6 * n, len(POSTING_FIELDS)), dtype=np.int64)
