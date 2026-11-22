@@ -275,6 +275,11 @@ class Run:
         from arthasim.inspector import EntityTrace
         return EntityTrace(self, entity_id)
 
+    def metric(self, name_or_fn, **kwargs: Any) -> pl.DataFrame:
+        """An outcome measure: a frame with one column per grouping and a `value` column."""
+        from arthasim.metrics import run_metric
+        return run_metric(self, name_or_fn, **kwargs)
+
     def sql(self, query: str) -> pl.DataFrame:
         con = duckdb.connect()
         for t in self.tables():
