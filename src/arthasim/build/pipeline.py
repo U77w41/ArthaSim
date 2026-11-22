@@ -50,17 +50,20 @@ def _l1(counts: np.ndarray, target) -> float:
     return float(np.abs(counts / total - np.asarray(target, dtype=np.float64)).sum()) if total else 0.0
 
 
-def fit_report(districts: list[DistrictMarginals], p: Persons) -> dict[str, Any]:
-    """Sum of absolute share errors for each fitted margin, per district."""
+def fit_report(districts: list[DistrictMarginals], p: Persons,
+               stage_target: np.ndarray | None = None) -> dict[str, Any]:
+    """Sum of absolute share errors for each fitted margin, per district. With `stage_target`
+    ((n_districts, 2, 9) share rows), life stages are compared with it instead of the YAML rows."""
     out: dict[str, dict[str, float]] = {}
     for di, d in enumerate(districts):
         s = p.district == di
+        want = d.life_stage if stage_target is None else stage_target[di]
         out[d.id] = {
             "age_band": _l1(np.bincount(p.age_band[s], minlength=5), d.age_band),
             "sex": _l1(np.bincount(p.sex[s], minlength=2), d.sex),
             "education": _l1(np.bincount(p.education[s], minlength=5), d.education),
-            "life_stage_F": _l1(np.bincount(p.life_stage[s & (p.sex == c.F)], minlength=9), d.life_stage[c.F]),
-            "life_stage_M": _l1(np.bincount(p.life_stage[s & (p.sex == c.M)], minlength=9), d.life_stage[c.M]),
+            "life_stage_F": _l1(np.bincount(p.life_stage[s & (p.sex == c.F)], minlength=9), want[c.F]),
+            "life_stage_M": _l1(np.bincount(p.life_stage[s & (p.sex == c.M)], minlength=9), want[c.M]),
         }
     return {"l1": out, "max_l1": max(v for margins in out.values() for v in margins.values())}
 
