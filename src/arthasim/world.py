@@ -229,6 +229,11 @@ class Run:
     def table(self, name: str) -> pl.LazyFrame:
         return read_table(Path(self.path), name)
 
+    def view(self, kind: str, asof: Date | None = None, **scope: Any):
+        """What one observer (bank, switch, bureau or truth) sees of this run."""
+        from arthasim.views import make_view
+        return make_view(self, kind, asof=asof, **scope)
+
     def sql(self, query: str) -> pl.DataFrame:
         con = duckdb.connect()
         for t in self.tables():
