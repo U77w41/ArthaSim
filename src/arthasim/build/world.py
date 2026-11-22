@@ -24,6 +24,7 @@ class EntityKind(IntEnum):
     BOUNDARY = 6
     BILLER = 7
     NBFC = 8
+    GOVERNMENT = 9
 
 
 class Sector(IntEnum):
@@ -32,6 +33,7 @@ class Sector(IntEnum):
     BANK = 3
     CENTRAL_BANK = 4
     BOUNDARY = 5
+    GOVERNMENT = 6
 
 
 @dataclass

@@ -20,6 +20,7 @@ class Rail(IntEnum):
     IMPS = 8
     AEPS = 9
     BRANCH = 10
+    APBS = 11               # Aadhaar Payment Bridge: DBT credits
 
 
 class Status(IntEnum):
@@ -37,6 +38,9 @@ class Purpose(IntEnum):
     EMPLOYER_REVENUE = 4
     REMITTANCE = 5
     ALLOWANCE = 6           # earner to a member of their own household
+    DBT_PM_KISAN = 7
+    DBT_OLD_AGE_PENSION = 8
+    DBT_WOMEN = 9
     GROCERY = 10            # merchant category k has purpose 10 + k
     FOOD = 11
     FUEL = 12

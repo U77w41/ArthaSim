@@ -16,6 +16,7 @@ class Kind(IntEnum):
     CASH_WITHDRAWAL = 3
     INTERBANK_SETTLEMENT = 4
     CASH_DEPOSIT = 5
+    GOVERNMENT_TRANSFER = 6
 
 
 class FlowType(IntEnum):
@@ -28,6 +29,7 @@ class FlowType(IntEnum):
     PENSION = 7
     REMITTANCE = 8
     HOUSEHOLD_TRANSFER = 9
+    SOCIAL_BENEFIT = 10
 
 
 class LedgerError(Exception):
@@ -56,6 +58,11 @@ def check_shape(kind: int, lines: Sequence[tuple[int, int]], book: InstrumentBoo
         ok = (len(lines) == 3 and types == [T.CASH, T.DEPOSIT, T.CASH]
               and deltas[0] < 0 and deltas[1] == -deltas[0] and deltas[2] == -deltas[0]
               and book.holder[accts[1]] == book.holder[accts[0]]
+              and book.holder[accts[2]] == book.issuer[accts[1]])
+    elif kind == Kind.GOVERNMENT_TRANSFER:
+        # Government balance down; the beneficiary's deposit and its bank's reserves up.
+        ok = (len(lines) == 3 and types == [T.GOVERNMENT, T.DEPOSIT, T.RESERVE]
+              and deltas[0] < 0 and deltas[1] == -deltas[0] and deltas[2] == -deltas[0]
               and book.holder[accts[2]] == book.issuer[accts[1]])
     elif kind == Kind.INTERBANK_SETTLEMENT:
         ok = len(lines) >= 2 and all(t == T.RESERVE for t in types) and sum(deltas) == 0

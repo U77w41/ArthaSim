@@ -59,6 +59,8 @@ def _check_shapes(journal: pl.DataFrame, postings: pl.DataFrame, book: Instrumen
     ok |= ((kind == Kind.CASH_DEPOSIT) & (n == 3) & (t0 == T.CASH) & (t1 == T.DEPOSIT) & (t2 == T.CASH)
            & (d0 < 0) & (d1 == -d0) & (d2 == -d0)
            & (book.holder[a1] == book.holder[a0]) & (book.holder[a2] == book.issuer[a1]))
+    ok |= ((kind == Kind.GOVERNMENT_TRANSFER) & (n == 3) & (t0 == T.GOVERNMENT) & (t1 == T.DEPOSIT)
+           & (t2 == T.RESERVE) & (d0 < 0) & (d1 == -d0) & (d2 == -d0) & (book.holder[a2] == book.issuer[a1]))
     non_reserve = np.bincount(idx, weights=(typ != T.RESERVE), minlength=len(jid))
     ok |= (kind == Kind.INTERBANK_SETTLEMENT) & (n >= 2) & (non_reserve == 0) & (total == 0)
     if not ok.all():
@@ -70,14 +72,17 @@ def flow_matrix(journal: pl.DataFrame, postings: pl.DataFrame, book: InstrumentB
                 sector_of: np.ndarray) -> pl.DataFrame:
     """Net income and expenditure flows by flow type and holder sector.
 
-    Covers PAYMENT and CASH_PAYMENT entries. Asset swaps (cash withdrawal,
-    interbank settlement) change stocks, not income, and are left out."""
+    Covers PAYMENT and CASH_PAYMENT entries, and the government and deposit lines of a
+    GOVERNMENT_TRANSFER. Asset swaps (cash withdrawal, interbank settlement, and the reserve line
+    of a government transfer, matched by the bank's new deposit liability) change stocks, not
+    income, and are left out."""
     if journal.height == 0 or postings.height == 0:
         return pl.DataFrame(schema=_FLOW_SCHEMA)
     _, idx, acct, delta = _arrays(journal, postings)
     kind = journal["kind"].to_numpy()[idx]
     flow = journal["flow_type"].to_numpy()[idx]
-    m = (kind == Kind.PAYMENT) | (kind == Kind.CASH_PAYMENT)
+    m = ((kind == Kind.PAYMENT) | (kind == Kind.CASH_PAYMENT)
+         | ((kind == Kind.GOVERNMENT_TRANSFER) & (book.type[acct] != T.RESERVE)))
     frame = pl.DataFrame({"flow_type": flow[m].astype(np.int64),
                           "sector": np.asarray(sector_of)[book.holder[acct[m]]].astype(np.int64),
                           "net_paise": delta[m].astype(np.int64)}, schema=_FLOW_SCHEMA)

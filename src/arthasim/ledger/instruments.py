@@ -10,6 +10,7 @@ class InstrumentType(IntEnum):
     DEPOSIT = 1
     CASH = 2
     RESERVE = 3
+    GOVERNMENT = 4          # the government's balance at the central bank
 
 
 class InstrumentBook:
