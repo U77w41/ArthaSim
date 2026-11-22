@@ -93,13 +93,15 @@ def _spike_frames(state: WorldState, config: Config) -> dict[str, pl.DataFrame]:
 
 
 def _household_monthly(state: WorldState, month: str) -> pl.DataFrame:
-    """Each household's budgeting state as set at the start of the month (truth layer)."""
+    """Each household's budgeting state as set at the start of the month (truth layer). `income_paise` is
+    earned income; `transfer_income_paise` is DBT at its monthly value; the budget counts both."""
     beh = state.behaviour
     n = beh.income.size
     return pl.DataFrame({
         "household_id": np.arange(n, dtype=np.int64), "month": pl.Series([month] * n, dtype=pl.String),
         "income_paise": beh.income, "balance_paise": beh.balance, "buffer_months": beh.buffer_months,
-        "stress": beh.stress, "budget_paise": beh.budget, "medical_due_paise": beh.medical_due})
+        "stress": beh.stress, "budget_paise": beh.budget, "medical_due_paise": beh.medical_due,
+        "transfer_income_paise": beh.transfer_income})
 
 
 class World:

@@ -134,8 +134,8 @@ class Allowance(BehaviourModule):
     def monthly(self, world, month: dt.date) -> None:
         s, seed = world.state, world.seed
         pop = s.population
-        payer, recipient, amount = allowance_pairs(pop.households.household_of_person,
-                                                   pop.attributes.monthly_income_paise, allowance_need(world),
+        income = pop.attributes.monthly_income_paise + s.behaviour.person_transfer   # earned plus DBT
+        payer, recipient, amount = allowance_pairs(pop.households.household_of_person, income, allowance_need(world),
                                                    world.params.get("transfer.allowance_margin"))
         employer = s.person_employer[payer]
         payday = np.full(payer.size, -1, dtype=np.int64)

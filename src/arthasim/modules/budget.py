@@ -37,11 +37,13 @@ class Budget(BehaviourModule):
         n = pop.households.adults.size
         income = np.zeros(n, dtype=np.int64)
         np.add.at(income, hh, pop.attributes.monthly_income_paise)
+        transfer = np.zeros(n, dtype=np.int64)          # DBT, counted at its monthly value
+        np.add.at(transfer, hh, beh.person_transfer)
         balance = np.zeros(n, dtype=np.int64)
         np.add.at(balance, hh, s.book.balance[s.person_cash])
         banked = s.person_deposit >= 0
         np.add.at(balance, hh[banked], s.book.balance[s.person_deposit[banked]])
-        budget, buffer_months, stress = household_budget(income, balance, pop.households.adults,
+        budget, buffer_months, stress = household_budget(income + transfer, balance, pop.households.adults,
                                                          pop.households.dependants, params)
 
         # Medical shocks: keyed on the calendar month, so a mid-month start draws the same shocks.
@@ -56,6 +58,6 @@ class Budget(BehaviourModule):
         medical_due = np.where(hit, np.maximum(100, np.rint(cost)), 0).astype(np.int64)
         stress = np.where(hit, np.minimum(1.0, stress + params.get("shock.stress_bonus")), stress)
 
-        beh.income[:], beh.balance[:], beh.budget[:] = income, balance, budget
+        beh.income[:], beh.transfer_income[:], beh.balance[:], beh.budget[:] = income, transfer, balance, budget
         beh.buffer_months[:], beh.stress[:], beh.medical_due[:] = buffer_months, stress, medical_due
         beh.person_budget[:] = budget[hh] // pop.households.adults[hh]

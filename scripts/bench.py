@@ -270,7 +270,8 @@ def _mixed_households(world):
     from arthasim.modules.allowance import allowance_need
 
     pop = world.state.population
-    hh, income = pop.households.household_of_person, pop.attributes.monthly_income_paise
+    hh = pop.households.household_of_person
+    income = pop.attributes.monthly_income_paise + world.state.behaviour.person_transfer   # as Allowance sees it
     need = allowance_need(world)
     n = len(pop.households.adults)
     short = np.bincount(hh, weights=np.maximum(0.0, need - income), minlength=n) > 0

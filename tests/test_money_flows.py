@@ -26,7 +26,7 @@ def test_population_world_runs_on_the_new_modules(tmp_path):
     assert int(s.book.balance[s.merchant_cash].sum()) < 10 * len(s.merchant_cash) * P.get("cash.merchant_float_paise")
     monthly = run.table("truth_household_monthly").collect()
     assert monthly.columns == ["household_id", "month", "income_paise", "balance_paise", "buffer_months",
-                               "stress", "budget_paise", "medical_due_paise"]
+                               "stress", "budget_paise", "medical_due_paise", "transfer_income_paise"]
     assert monthly["month"].unique().sort().to_list() == ["2025-04", "2025-05"]
     assert monthly.height == 2 * len(s.population.households.adults)
 

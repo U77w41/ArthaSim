@@ -131,3 +131,59 @@ def test_split_run_equals_single_run_and_determinism(tmp_path):
     two = w.run(until="2025-05-12")
     assert "truth_dbt_monthly" in one.manifest["content_hash"]
     assert one.manifest["content_hash"] == two.manifest["content_hash"]
+
+
+# --- budgets and allowances count transfers ----------------------------------------------------
+import datetime as dt  # noqa: E402
+from arthasim.modules.allowance import Allowance, allowance_need  # noqa: E402
+from arthasim.modules.budget import Budget, household_budget  # noqa: E402
+
+APRIL = dt.date(2025, 4, 1)
+
+
+def test_budget_counts_transfer_income(tmp_path):
+    world = World.build(cfg(tmp_path), seed=7)
+    s, beh = world.state, world.state.behaviour
+    pop = s.population
+    hh = pop.households.household_of_person
+    x = int(np.flatnonzero(pop.attributes.monthly_income_paise == 0)[0])
+    beh.person_transfer[x] = 150_000
+    Budget().monthly(world, APRIL)
+    earned = np.bincount(hh, weights=pop.attributes.monthly_income_paise, minlength=beh.income.size).astype(np.int64)
+    transfer = np.zeros(beh.income.size, dtype=np.int64)
+    transfer[hh[x]] = 150_000
+    assert np.array_equal(beh.income, earned) and np.array_equal(beh.transfer_income, transfer)
+    want, _, _ = household_budget(earned + transfer, beh.balance, pop.households.adults, pop.households.dependants,
+                                  world.params)
+    assert np.array_equal(beh.budget, want)
+
+
+def test_allowance_shortfall_falls_by_the_transfer(tmp_path):
+    world = World.build(cfg(tmp_path), seed=7)
+    pop, beh = world.state.population, world.state.behaviour
+    Budget().monthly(world, APRIL)
+    allowance = Allowance()
+    allowance.monthly(world, APRIL)
+    payer, rec, amount, _ = allowance._pairs
+    hh = pop.households.household_of_person
+    income = pop.attributes.monthly_income_paise
+    need = allowance_need(world)
+    two = pop.households.adults[hh[rec]] == 2
+    full = (need[rec] - income[rec]) + world.params.get("transfer.allowance_margin") * need[rec]
+    funded = income[payer] - need[payer] > full + 1_000          # the payer covers shortfall and margin in full
+    pick = np.flatnonzero(two & funded & (income[rec] == 0) & (need[rec] > 300_000))[0]
+    who, before = rec[pick], amount[pick]
+    beh.person_transfer[who] = 150_000
+    allowance.monthly(world, APRIL)
+    payer2, rec2, amount2, _ = allowance._pairs
+    assert amount2[(rec2 == who) & (payer2 == payer[pick])].tolist() == [before - 150_000]
+
+
+def test_household_monthly_table_has_transfer_column(tmp_path):
+    run = World.build(cfg(tmp_path), seed=7).run(until="2025-04-30")
+    h = run.table("truth_household_monthly").collect()
+    assert h.columns[-1] == "transfer_income_paise"
+    dbt = run.sql("select sum(monthly_value_paise) as v from truth_dbt_monthly where month = '2025-04'")["v"][0]
+    assert int(h["transfer_income_paise"].sum()) == int(dbt) > 0
+    esm = run.sql("select sum(monthly_income_paise) as v from entity_state_monthly where month = '2025-04'")["v"][0]
+    assert int(h["income_paise"].sum()) == int(esm)
