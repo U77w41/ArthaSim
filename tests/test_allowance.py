@@ -151,7 +151,7 @@ from arthasim import Config, World
 
 def test_world_runs_allowance(tmp_path):
     world = World.build(Config.tier("S", persons=5_000, out_dir=str(tmp_path)), seed=7)
-    assert [m.name for m in world.modules] == ["income", "remittances", "budget", "allowance", "consumption", "cash"]
+    assert [m.name for m in world.modules] == ["lifecourse", "income", "remittances", "budget", "allowance", "consumption", "cash"]
     run = world.run(until="2025-05-31")       # every invariant is checked daily
     rows = run.sql("""
         select pa.household_id as payer_hh, pb.household_id as payee_hh, y.status

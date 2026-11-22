@@ -19,6 +19,7 @@ from arthasim.modules.base import BehaviourModule
 from arthasim.modules.budget import Budget
 from arthasim.modules.cash import CashManagement
 from arthasim.modules.income_flows import Income
+from arthasim.modules.lifecourse import LifeCourse
 from arthasim.modules.remittances import Remittances
 from arthasim.modules.spending import Consumption
 from arthasim.modules.spike import SpikeConsumption, SpikeIncome
@@ -108,7 +109,8 @@ class World:
         self._date = config.start
         self.counters = Counters()
         self.modules: list[BehaviourModule] = (
-            [Income(), Remittances(), Budget(), Allowance(), Consumption(), CashManagement()] if state.population is not None
+            [LifeCourse(), Income(), Remittances(), Budget(), Allowance(), Consumption(), CashManagement()]
+            if state.population is not None
             else [SpikeIncome(), SpikeConsumption()])
         self._store = Store(path)
         self._days = 0
@@ -158,6 +160,9 @@ class World:
         month = f"{day:%Y-%m}"
         if monthly_ran and self.state.behaviour is not None:
             self._store.add("truth_household_monthly", month, _household_monthly(self.state, month))
+        for module in self.modules:
+            for name, frame in module.tables().items():
+                self._store.add(name, month, frame)
         self._store.add("payments", month, payments)
         self._store.add("journal", month, journal)
         self._store.add("postings", month, postings)
@@ -170,6 +175,11 @@ class World:
 
     def _flush(self) -> None:
         self._store.flush()
+        if self.state.population is not None:
+            # Accounts opened during the run join the accounts and instruments tables.
+            from arthasim.build.pipeline import account_frames
+            for name, frame in account_frames(self.state, self.config).items():
+                self._store.write_dimension(name, frame)
         manifest: dict[str, Any] = {
             "run_id": self.path.name, "seed": self.seed, "config_hash": self.config.hash(),
             "registry_version": self.params.version(), "code_version": _CODE_VERSION,

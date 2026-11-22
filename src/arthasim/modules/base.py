@@ -24,3 +24,7 @@ class BehaviourModule:
 
     def intents(self, world: "World", day: dt.date) -> Intents | pl.DataFrame:
         return Intents.empty()
+
+    def tables(self) -> dict[str, pl.DataFrame]:
+        """Fact-table frames produced since the last call; the world stores them under the day's month."""
+        return {}
