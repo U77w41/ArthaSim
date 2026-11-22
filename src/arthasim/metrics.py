@@ -106,6 +106,8 @@ def deposit_balance(run: "Run", by=None) -> pl.DataFrame:
     """Paise in persons' deposit accounts at each month end; always grouped by month."""
     groups = _groups(by, _BALANCE_BY, "deposit_balance")
     _needs_population(run, groups or ["district"], "deposit_balance")
+    if "balances_monthly" not in run.tables():          # no month has closed yet
+        return pl.DataFrame(schema={"month": pl.String, **{g: pl.String for g in groups}, "value": pl.Int64})
     expr = {"bank": "k.bank_code", "district": "p.district", "life_stage": "e.life_stage"}
     joins = " left join banks k on k.entity_id = a.issuer_entity_id" if "bank" in groups else ""
     if "life_stage" in groups:

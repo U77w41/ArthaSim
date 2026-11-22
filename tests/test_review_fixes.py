@@ -157,3 +157,11 @@ def test_export_carries_no_seed_and_says_what_it_protects(tmp_path):
     assert "source_run_id" not in m and len(m["source_run"]) == 16
     readme = (dest / "README.md").read_text()
     assert "not anonymised" in readme and "pan_like" in readme and "ref" in readme
+
+
+def test_deposit_balance_before_any_month_has_closed(tmp_path):
+    """Minor 1, re-graded: a run with no closed month gives an empty frame, like net_worth, not an error."""
+    run = World.build(_cfg(tmp_path, "d", start="2025-04-20"), seed=7).run(until="2025-04-25")
+    assert "balances_monthly" not in run.tables()
+    db = run.metric("deposit_balance", by="bank")
+    assert db.columns == ["month", "bank", "value"] and db.height == 0
