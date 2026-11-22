@@ -26,7 +26,7 @@ def test_population_world_builds_and_runs(tmp_path):
     assert abs(m["scale_factor"] - 1000.0) < 1e-9 and m["build_report"]["max_l1"] < 0.05
     assert set(run.tables()) == {"payments", "journal", "postings", "persons", "households", "orgs", "banks",
                                  "accounts", "instruments", "edges", "geo", "truth_person_latent",
-                                 "truth_household_monthly", "life_events", "entity_state_monthly"}
+                                 "truth_household_monthly", "life_events", "entity_state_monthly", "truth_dbt_monthly"}
     pay = run.table("payments").collect()
     cash = s.person_cash[unbanked].tolist()
     theirs = pay.filter(pl.col("payer_account_id").is_in(cash))

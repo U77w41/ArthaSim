@@ -7,7 +7,7 @@ from pathlib import Path
 import polars as pl
 
 FACT_TABLES = ["payments", "journal", "postings", "truth_household_monthly", "life_events",
-               "entity_state_monthly"]
+               "entity_state_monthly", "truth_dbt_monthly"]
 DIM_TABLES = ["persons", "households", "orgs", "banks", "accounts", "instruments", "edges", "geo",
               "truth_person_latent"]
 

@@ -27,9 +27,15 @@ class LifeCourse(BehaviourModule):
 
     def __init__(self) -> None:
         self._tables: dict[str, pl.DataFrame] = {}
+        self._state = None
+        self._state_month: str | None = None
 
     def tables(self) -> dict[str, pl.DataFrame]:
         out, self._tables = self._tables, {}
+        if self._state_month is not None:
+            # Built after every module's monthly hook (accounts opened for DBT show in the month they open).
+            out["entity_state_monthly"] = state_frame(self._state, self._state_month)
+            self._state_month = None
         return out
 
     def monthly(self, world, month: dt.date) -> None:
@@ -46,7 +52,8 @@ class LifeCourse(BehaviourModule):
             cycle.run(log)
         events = log.frame(first, s.life.next_event_id)
         s.life.next_event_id += events.height
-        self._tables = {"life_events": events, "entity_state_monthly": state_frame(s, f"{month:%Y-%m}")}
+        self._tables = {"life_events": events}
+        self._state, self._state_month = s, f"{month:%Y-%m}"
 
 
 class _Cycle:

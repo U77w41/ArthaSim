@@ -18,6 +18,7 @@ from arthasim.modules.allowance import Allowance
 from arthasim.modules.base import BehaviourModule
 from arthasim.modules.budget import Budget
 from arthasim.modules.cash import CashManagement
+from arthasim.modules.dbt import GovernmentTransfers
 from arthasim.modules.income_flows import Income
 from arthasim.modules.lifecourse import LifeCourse
 from arthasim.modules.remittances import Remittances
@@ -109,7 +110,8 @@ class World:
         self._date = config.start
         self.counters = Counters()
         self.modules: list[BehaviourModule] = (
-            [LifeCourse(), Income(), Remittances(), Budget(), Allowance(), Consumption(), CashManagement()]
+            [LifeCourse(), Income(), Remittances(), GovernmentTransfers(), Budget(), Allowance(), Consumption(),
+             CashManagement()]
             if state.population is not None
             else [SpikeIncome(), SpikeConsumption()])
         self._store = Store(path)

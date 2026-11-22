@@ -11,7 +11,8 @@ def cfg(tmp_path, **kw):
 
 def test_population_world_runs_on_the_new_modules(tmp_path):
     world = World.build(cfg(tmp_path), seed=7)
-    assert [m.name for m in world.modules] == ["lifecourse", "income", "remittances", "budget", "allowance", "consumption", "cash"]
+    assert [m.name for m in world.modules] == ["lifecourse", "income", "remittances", "dbt", "budget", "allowance", "consumption",
+                                                "cash"]
     run = world.run(until="2025-05-20")
     pay = run.table("payments").collect()
     purposes, rails = set(pay["purpose"].unique()), set(pay["rail"].unique())
