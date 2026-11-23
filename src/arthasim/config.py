@@ -4,11 +4,13 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import re
+import secrets
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 
 _TIERS: dict[str, dict[str, Any]] = {
     "XS": dict(persons=10_000, employers=100, merchants=300, banks=3),
@@ -32,6 +34,18 @@ class Config(BaseModel):
     out_dir: str = "runs"
     params_path: str = "params/registry.yaml"
     param_overrides: dict[str, Any] = Field(default_factory=dict)
+    # Keys the run's random draws and identifiers when set; never written to disk (see `hash` and `to_yaml`).
+    release_secret: SecretStr | None = None
+
+    @field_validator("release_secret")
+    @classmethod
+    def _secret_format(cls, v: SecretStr | None) -> SecretStr | None:
+        if v is not None:
+            text = v.get_secret_value()
+            if not re.fullmatch(r"[0-9a-fA-F]+", text) or len(text) < 32 or len(text) % 2:
+                raise ValueError("release_secret must be an even number of hex digits, at least 32 "
+                                 "(arthasim.new_release_secret() makes one)")
+        return v
 
     @field_validator("slots_per_day")
     @classmethod
@@ -63,11 +77,25 @@ class Config(BaseModel):
         return cls(**yaml.safe_load(Path(path).read_text()))
 
     def to_yaml(self, path: str | Path) -> None:
-        Path(path).write_text(yaml.safe_dump(self.model_dump(mode="json"), sort_keys=True))
+        """Write the config. The release secret is never written."""
+        Path(path).write_text(yaml.safe_dump(self.model_dump(mode="json", exclude={"release_secret"}), sort_keys=True))
 
     def with_params(self, **overrides: Any) -> "Config":
         return self.model_copy(update={"param_overrides": {**self.param_overrides, **overrides}})
 
+    def secret_bytes(self) -> bytes | None:
+        return bytes.fromhex(self.release_secret.get_secret_value()) if self.release_secret is not None else None
+
     def hash(self) -> str:
-        blob = json.dumps(self.model_dump(mode="json"), sort_keys=True)
+        """Unchanged from earlier versions when no secret is set; with one, it covers a keyed digest of it."""
+        fields = self.model_dump(mode="json", exclude={"release_secret"})
+        secret = self.secret_bytes()
+        if secret is not None:
+            fields["release_secret"] = hashlib.blake2b(b"arthasim.config-hash", key=secret, digest_size=32).hexdigest()
+        blob = json.dumps(fields, sort_keys=True)
         return hashlib.sha256(blob.encode()).hexdigest()
+
+
+def new_release_secret() -> str:
+    """A fresh 256-bit release secret, as 64 hex digits."""
+    return secrets.token_hex(32)
