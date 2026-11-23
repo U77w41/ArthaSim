@@ -151,6 +151,9 @@ DESCRIPTIONS: dict[str, dict[str, str]] = {
         "district": "District of the customer's address.", "locality": "Locality within the district.",
         "has_pan": "Whether the customer gave a PAN.", "pan_like": "PAN-shaped identifier; cannot be a real PAN.",
         "mobile_token": "Opaque token standing for the registered mobile number.",
+        "uid_token": "Opaque token standing for the Aadhaar number. Present when an account here has received a DBT "
+                     "credit (APBS) or made an AePS withdrawal, both of which need the Aadhaar link; the simulation "
+                     "does not model Aadhaar given voluntarily for e-KYC.",
         "sector": "Employer's sector (organisations).", "category": "Merchant or biller category (organisations).",
     },
     "accounts": {
@@ -340,21 +343,37 @@ def _bank(view: View, asof: dt.date | None) -> dict[str, str]:
     cut = asof_us(asof) if asof is not None else None
     opened = f"and opened_on <= {day}" if day else ""
     own = f"select account_id from ({acct_sql(src)}) where bank_code = '{code}' and type = 'DEPOSIT' {opened}"
+    settled = f"and y.settle_ts < {cut}" if cut is not None else ""
+    # KYC lets a bank keep the Aadhaar number of a DBT beneficiary; APBS credits and AePS withdrawals both need the
+    # account's Aadhaar link. So the bank holds the token once either has happened on an account here.
     customers = f"""
         with first_open as (
             select a.holder_entity_id as entity_id, min(a.opened_on) as first_opened
             from {src('accounts')} a join {src('banks')} b on a.issuer_entity_id = b.entity_id
             where b.bank_code = '{code}' and a.type = 'DEPOSIT' {opened.replace('opened_on', 'a.opened_on')}
-            group by 1)
+            group by 1),
+        here as (select account_id, holder_entity_id from ({acct_sql(src)})
+                 where bank_code = '{code}' and type = 'DEPOSIT'),
+        aadhaar as (
+            select h.holder_entity_id as entity_id from {src('payments')} y
+            join here h on h.account_id = y.payee_account_id
+            where y.rail = 'APBS' and y.status = 'SUCCESS' {settled}
+            union
+            select h.holder_entity_id from {src('payments')} y
+            join here h on h.account_id = y.payer_account_id
+            where y.rail = 'AEPS' {settled})
         select c.entity_id, c.customer_no,
                case when p.entity_id is not null then 'PERSON' else o.kind end as kind,
                p.sex, p.birth_year, p.birth_month,
                coalesce(p.district, o.district) as district, coalesce(p.locality, o.locality) as locality,
-               p.has_pan, p.pan_like, p.mobile_token, o.sector, o.category
+               p.has_pan, p.pan_like, p.mobile_token,
+               case when d.entity_id is not null then p.uid_token end as uid_token,
+               o.sector, o.category
         from {src('bank_customers')} c
         join first_open f using (entity_id)
         left join {src('persons')} p using (entity_id)
         left join {src('orgs')} o using (entity_id)
+        left join aadhaar d using (entity_id)
         where c.bank_code = '{code}'
         order by c.entity_id"""
     accounts = f"""

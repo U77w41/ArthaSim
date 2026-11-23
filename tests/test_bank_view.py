@@ -66,7 +66,7 @@ def test_bank_view_hides_other_banks_and_truth():
         if "entity_id" in frame.columns:
             assert set(frame["entity_id"].to_list()) <= customers, t
     cust = v.table("customers").collect()
-    assert "uid_token" not in cust.columns and "education" not in cust.columns and "birth_year" in cust.columns
+    assert "uid_token" in cust.columns and "education" not in cust.columns and "birth_year" in cust.columns
     assert cust["customer_no"].str.starts_with("CIFSYNB03-").all()
     narr = v.table("statement_lines").collect()["narration"]
     assert narr.null_count() == 0
