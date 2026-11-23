@@ -507,3 +507,47 @@ A fresh reviewer (Opus) read the whole branch (`1b5d045..6570590`) and returned 
 - `_bank_customers` finds the boundary bank by index, not by code.
 - `deposit_balance` on a spike run names groupings nobody asked for.
 - The cross-bank "every posting once" check counts rows only.
+
+# Safe partner exports execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-23-arthasim-safe-partner-exports.md`. Spec: `docs/superpowers/specs/2026-11-23-safe-partner-exports-design.md`. Results: `docs/phase1c2_results.md`.
+Run on an Apple M5 with Python 3.12 (numba 0.68.1, polars 2.1.0, duckdb 2.0.1), from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `claude/suspicious-wilbur-1ca482` in its own git worktree, from `main` at `b188ed0`. Executed inline (native), with one fresh Opus review of the whole branch.
+
+The project owner decided the shape in conversation:
+- a partner may have the code;
+- approach A, a release secret in `Config`;
+- SipHash-2-4 for secret runs, accepting slower release runs;
+- `uid_token` for customers with an APBS credit or an AePS withdrawal at the bank.
+
+A builder-check subagent read the first draft. It raised three questions:
+- **The legal premise.** The KYC rule also allows voluntary Aadhaar, and AePS needs the link. The owner chose APBS or AePS.
+- **The 64-bit cap and invertibility of the mixer.** The owner chose SipHash.
+- **Export row order revealing `entity_id` rank.** I settled this myself: the export sorts by the bank's own numbers.
+
+## Tasks
+
+| Task | Commits | Tests |
+| :--- | :--- | :--- |
+| 1. Release secret in `Config` | `fac31be` | 15 passed |
+| 2. SipHash-2-4 keyed draws | `8ead617` | 8 passed |
+| 3. Keyed `pan_like`, identifier keys | `81a893d` | 21 passed; full suite 317 |
+| 4. World with a secret, bench `--release` | `1088dab` | full suite 324 |
+| 5. `uid_token` in bank `customers` | `3acab98` | 31 passed |
+| 6. Export flag, keyed `source_run`, row order | `c28bf49` | full suite 331 |
+| 7. Benches, slow gates, results | this commit | 6 slow gates pass (289 s) |
+
+## Rulings
+
+- **Task 5.** The `aadhaar` CTE uses `union`, not `union all`. A duplicate row would duplicate customers in the left join, and the plan's "distinct holder from a union all" means the same thing. Cost if wrong: none.
+- **Task 7, folder name.** The plan expected the plain bench's folder to be `S-seed7-08112731`. But `bench.py` puts a timestamped `out_dir` into the config, and `out_dir` is in the config hash, so bench folders always differ from run to run. I checked instead that the branch computes `08112731` for the baseline's settings, on top of the pinned hash tests. Cost if wrong: none.
+- **Task 7, `geo`.** The spec says every table's hash differs with a secret. `geo` is built from the config with no draws, so it is equal in both runs. Cost if wrong: none.
+- **Task 7, timing.** The first `main` baseline (10.7 s of simulation) came from a quieter machine. The slowdown is measured from interleaved runs of `main`, the plain branch and the secret branch. With a secret, simulation is 33% slower, against the spec's estimate of 25–30%. Cost if wrong: the owner may want the figure re-measured on an idle machine.
+
+## Citation
+
+The KYC citation was checked word for word on rbi.org.in, in the Master Direction updated as on 14 August 2025:
+- paragraph 16(a)(i) covers a section 7 benefit or subsidy;
+- paragraph 16(a)(ii) covers voluntary submission to a bank;
+- Explanation 1 requires redaction where authentication is not required.
+
+The fetch tools returned only a summary and a CAPTCHA page for the PDF. The text was read from the HTML page in the built-in browser.
