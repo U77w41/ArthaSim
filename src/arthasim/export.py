@@ -22,6 +22,9 @@ if TYPE_CHECKING:
     from arthasim.world import Run
 
 ID_COLUMNS = {"entity_id", "account_id", "payment_id", "journal_id", "household_id"}
+# A bank export lists rows by the bank's own numbers: simulator order would reveal each customer's rank by entity_id.
+BANK_ORDER = {"customers": "customer_no", "accounts": "account_no", "instruments": "account_no, kind, value",
+              "balances_monthly": "month, account_no"}
 
 
 def is_id(column: str) -> bool:
@@ -92,13 +95,21 @@ def _readme(view: View, run: "Run", tables: dict[str, dict[str, Any]], asof: str
              f"as of {asof or 'the end of the run'}. Money is in paise; times are epoch microseconds; dates are "
              "Asia/Kolkata. Synthetic data: no record describes a real person, account or bank.", ""]
     if view.kind != "truth":
-        lines += ["Simulator ID columns are removed. Customers and accounts carry the bank's own numbers, and the "
-                  "other side of a payment appears only as a handle and a bank code. Customer and account numbers, "
-                  "VPAs, terminals and the device, card, mobile and Aadhaar tokens are keyed one-way hashes. Two "
-                  "things still follow the simulation's order: `ref` is the run's payment sequence number (as an "
-                  "RRN would be), and `pan_like` encodes the person's place in the population. This export is not "
-                  "anonymised against someone who has the simulator's code and the run's settings; a release outside "
-                  "the project needs the review in section 17 of the blueprint.", ""]
+        common = ("Simulator ID columns are removed. Customers and accounts carry the bank's own numbers, and the "
+                  "other side of a payment appears only as a handle and a bank code. ")
+        if run.manifest.get("release_secret", False):
+            lines += [common + "This run was made with a release secret held by its owner. Customer and account "
+                      "numbers, VPAs, terminals, `pan_like` and the device, card, mobile and Aadhaar tokens are keyed "
+                      "with it, and the simulation's random numbers come from a generator keyed with it "
+                      "(SipHash-2-4). So neither the identifiers nor the run can be reproduced without the secret, "
+                      "even with the simulator's code. This does not hide what the rows themselves show, such as "
+                      "birth year, district and amounts, and it is not a formal anonymity guarantee.", ""]
+        else:
+            lines += [common + "Customer and account numbers, VPAs, terminals, `pan_like` and the device, card, "
+                      "mobile and Aadhaar tokens are keyed one-way values, but this run has no release secret: every "
+                      "key comes from the run's settings, so someone with the simulator's code who guesses them can "
+                      "re-create the run and link `ref` to it. This export is not anonymised and is not for release "
+                      "outside the project.", ""]
     for t, meta in tables.items():
         layout = "one folder per month (`month=YYYY-MM`)" if meta["layout"] == "month" else "one file"
         lines += [f"## {t}", "", f"{meta['rows']:,} rows, {layout}.", "", "| Column | Type | Meaning |",
@@ -110,8 +121,9 @@ def _readme(view: View, run: "Run", tables: dict[str, dict[str, Any]], asof: str
 
 
 def _source(run: "Run") -> str:
-    """The source run, named without its seed or settings."""
-    return hashlib.sha256(run.manifest["run_id"].encode()).hexdigest()[:16]
+    """The source run, named without its seed or settings: the run's own label (keyed when it has a release
+    secret), or for runs written before labels existed, a digest of its name."""
+    return run.manifest.get("source_label") or hashlib.sha256(run.manifest["run_id"].encode()).hexdigest()[:16]
 
 
 def export_view(run: "Run", dest: str | Path, view: str = "bank", asof: Date | None = None, **scope: Any) -> Path:
@@ -125,6 +137,9 @@ def export_view(run: "Run", dest: str | Path, view: str = "bank", asof: Date | N
         tables = _copy_truth(run, dest)
     else:
         defs = v._definitions()
+        if view == "bank":
+            defs = {t: f"select * from ({q}) order by {BANK_ORDER[t]}" if t in BANK_ORDER else q
+                    for t, q in defs.items()}
         with tempfile.TemporaryDirectory(prefix="arthasim-export-") as scratch:
             con = duckdb.connect(str(Path(scratch) / "export.duckdb"))
             try:
@@ -132,7 +147,8 @@ def export_view(run: "Run", dest: str | Path, view: str = "bank", asof: Date | N
             finally:
                 con.close()
     manifest = {"source_run": _source(run), "source_content_hash": run.manifest["content_hash"],
-                "view": view, "scope": v.scope, "asof": asof_text, "tables": tables}
+                "view": view, "scope": v.scope, "asof": asof_text,
+                "release_secret": bool(run.manifest.get("release_secret", False)), "tables": tables}
     (dest / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True))
     (dest / "README.md").write_text(_readme(v, run, tables, asof_text))
     return dest
