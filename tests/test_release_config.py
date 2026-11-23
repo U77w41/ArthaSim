@@ -38,3 +38,19 @@ def test_to_yaml_never_writes_the_secret(tmp_path):  # Review Focus 2
 def test_new_release_secret():
     s = arthasim.new_release_secret()
     assert len(s) == 64 and Config.tier("S", release_secret=s).secret_bytes() == bytes.fromhex(s)
+
+
+def _slices(text, n=16):
+    return {text[i:i + n] for i in range(len(text) - n + 1)}
+
+
+def test_errors_never_print_the_secret():           # final review, Important 1
+    bad = "ab" * 32 + "\n"                          # a near-miss secret is the real secret
+    with pytest.raises(ValueError) as field_error:
+        Config.tier("S", release_secret=bad)
+    good = "0123456789abcdef" * 4
+    with pytest.raises(ValueError) as model_error:   # a model-level rule fails while a valid secret is set
+        Config.tier("S", release_secret=good, districts=[])
+    assert "release_secret" in str(field_error.value)
+    assert not _slices(bad.strip()) & _slices(str(field_error.value))
+    assert not _slices(good) & _slices(str(model_error.value))

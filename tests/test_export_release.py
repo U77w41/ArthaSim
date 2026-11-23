@@ -5,6 +5,7 @@ import json
 
 import polars as pl
 
+from arthasim.engine.rng import KeyedSeed
 from arthasim.world import Run
 from run_fixture import RELEASE_SECRET, secret_run, small_run
 
@@ -27,10 +28,15 @@ def test_secret_run_export_says_so_and_carries_nothing_secret(tmp_path):
     readme = (dest / "README.md").read_text()
     assert "release secret" in readme and "SipHash-2-4" in readme and "not anonymised" not in readme
     assert "seed" not in ((dest / "manifest.json").read_text() + readme).lower()
-    for f in dest.rglob("*"):
-        if f.is_file():
-            data = f.read_bytes()
-            assert RELEASE_SECRET.encode() not in data and bytes.fromhex(RELEASE_SECRET) not in data, f
+    ks = KeyedSeed.derive(7, bytes.fromhex(RELEASE_SECRET))
+    draws = ks.k0.to_bytes(8, "little") + ks.k1.to_bytes(8, "little")
+    needles = [RELEASE_SECRET.encode(), bytes.fromhex(RELEASE_SECRET), ks.id_key, ks.id_key.hex().encode(),
+               draws, draws.hex().encode(), str(ks.k0).encode(), str(ks.k1).encode()]
+    files = [f for f in dest.rglob("*") if f.is_file()]
+    assert files
+    for f in files:
+        data = f.read_bytes()
+        assert not any(n in data for n in needles), f
 
 
 def test_plain_run_export_says_it_is_not_for_release(tmp_path):
@@ -60,3 +66,13 @@ def test_bank_export_rows_follow_the_banks_own_numbers(tmp_path):
     assert bal.height > 1 and bal.equals(bal.sort(["month", "account_no"]))
     view = run.view("bank", bank="SYNB03").table("customers").collect()
     assert view["entity_id"].is_sorted()          # the Python view keeps simulator order
+
+
+def test_readme_describes_pan_like_as_the_run_made_it(tmp_path):     # final review, Minor 2 re-graded
+    run = small_run()
+    new = (run.export(tmp_path / "new", view="bank", bank="SYNB03") / "README.md").read_text()
+    assert "`pan_like` is a keyed shuffle" in new and "encodes the person's place" not in new
+    old_run = Run(run.path, {k: v for k, v in run.manifest.items() if k not in ("source_label", "release_secret")})
+    old = (old_run.export(tmp_path / "old", view="bank", bank="SYNB03") / "README.md").read_text()
+    assert "`pan_like` encodes the person's place in the population" in old and "keyed shuffle" not in old
+    assert "not anonymised" in old

@@ -107,7 +107,7 @@ The model has no voluntary e-KYC, so the token marks only the two cases that nee
 
 ## Tests
 
-- **Fast suite:** 331 passed, against 299 on `main`.
+- **Fast suite:** 333 passed, against 299 on `main`.
 - **Slow gates:** all 6 (plans 0, 1a, 1b-1, 1b-2, 1c and 1d-1) pass in 289 s.
 - **Notable new tests:**
   - the keyed generator reproduces the published SipHash-2-4 vectors;
@@ -116,6 +116,28 @@ The model has no voluntary e-KYC, so the token marks only the two cases that nee
   - no file in a secret run's folder or export contains the secret or a derived key;
   - the same secret rebuilds the same run byte for byte;
   - tokens recomputed without the secret match none of the run's.
+
+## Review
+
+A fresh Opus reviewer read the whole branch, ran the fast suite and the slow gates, and checked the work independently:
+- the SipHash kernel against its own reference on 200 random keys, with no mismatches;
+- the Feistel permutation;
+- the byte identity of runs without a secret;
+- the `uid_token` counts, recomputed in Polars;
+- the export order at tier S.
+
+Verdict: "with fixes". There was no critical finding.
+
+**Fixed, each with a test:**
+- **A pydantic validation error printed the release secret.** A malformed secret showed in full, and a valid one leaked its last 22 digits through any other config error. `Config` now hides inputs in errors.
+- **The README of an export from a run made before this change** said `pan_like` was keyed. It now says what such a run's `pan_like` is: the person's place in the population.
+- **The export leak test** now also checks that no key derived from the secret appears in an export, as this note claims.
+
+**Deferred minors:**
+- a secret over 128 hex digits fails late, with a BLAKE2b error;
+- one validation case is not tested on its own;
+- stale `seed: int` annotations;
+- no domain tag on the source label key.
 
 ## Limits
 

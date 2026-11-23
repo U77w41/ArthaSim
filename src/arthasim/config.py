@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 _TIERS: dict[str, dict[str, Any]] = {
     "XS": dict(persons=10_000, employers=100, merchants=300, banks=3),
@@ -20,6 +20,9 @@ _TIERS: dict[str, dict[str, Any]] = {
 
 
 class Config(BaseModel):
+    # Validation errors echo their input by default, which would print the release secret (or most of it).
+    model_config = ConfigDict(hide_input_in_errors=True)
+
     tier_name: str
     start: dt.date = dt.date(2025, 4, 1)
     persons: int = Field(ge=1)

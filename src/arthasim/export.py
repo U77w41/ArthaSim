@@ -105,8 +105,11 @@ def _readme(view: View, run: "Run", tables: dict[str, dict[str, Any]], asof: str
                       "even with the simulator's code. This does not hide what the rows themselves show, such as "
                       "birth year, district and amounts, and it is not a formal anonymity guarantee.", ""]
         else:
-            lines += [common + "Customer and account numbers, VPAs, terminals, `pan_like` and the device, card, "
-                      "mobile and Aadhaar tokens are keyed one-way values, but this run has no release secret: every "
+            # Runs written before release secrets have no source label, and their `pan_like` is the plain index code.
+            pan = ("`pan_like` is a keyed shuffle of the person's place in the population"
+                   if "source_label" in run.manifest else "`pan_like` encodes the person's place in the population")
+            lines += [common + "Customer and account numbers, VPAs, terminals and the device, card, mobile and "
+                      f"Aadhaar tokens are keyed one-way hashes, and {pan}. But this run has no release secret: every "
                       "key comes from the run's settings, so someone with the simulator's code who guesses them can "
                       "re-create the run and link `ref` to it. This export is not anonymised and is not for release "
                       "outside the project.", ""]

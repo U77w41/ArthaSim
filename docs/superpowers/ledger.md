@@ -551,3 +551,29 @@ The KYC citation was checked word for word on rbi.org.in, in the Master Directio
 - Explanation 1 requires redaction where authentication is not required.
 
 The fetch tools returned only a summary and a CAPTCHA page for the PDF. The text was read from the HTML page in the built-in browser.
+
+## Final review
+
+A fresh Opus reviewer read the branch `b188ed0..58a0055`, ran the fast suite (331) and the slow gates (6), and checked the cryptography, the keying coverage, the byte identity of runs without a secret, the `uid_token` rule and the export order independently. Verdict: "with fixes". There was no critical finding, one important finding and seven minor ones.
+
+**Fixed**, each with a test:
+- **The release secret in validation errors.** A pydantic error echoed its input, so a malformed secret printed in full and a valid one leaked its last 22 digits through a model-level error. `Config` now sets `hide_input_in_errors`. The test `test_errors_never_print_the_secret` failed first, then passed.
+- **The README of exports from runs written before this change** claimed `pan_like` was keyed. I re-graded this minor to important under the "false promise" anti-goal. The README now describes `pan_like` as the run made it. The test `test_readme_describes_pan_like_as_the_run_made_it` failed first, then passed.
+- **The results note's claim that no derived key reaches an export.** I re-graded this minor to important under the rule that every statement in a results note is re-queried. The export leak test now checks the derived keys. It passed first time: the code was right, and the claim lacked a test.
+
+Suite after fixes: 333 passed.
+
+**Rulings on the reviewer's "declined to judge" list:**
+- **`ref` order.** It is a non-goal, and the reviewer measured no rank leak in it: 51.4% ascending.
+- **`source_content_hash`.** It shows only `geo` across secrets.
+- **Tracebacks with locals and pickles.** They are outside the spec's surfaces.
+- **`model_copy` bypassing validation.** It is not a supported way to set the secret.
+- **The KYC wording.** It was read word for word.
+- **Bureau and switch export order.** The spec limits reordering to bank exports.
+- **The 33% slowdown.** It is the owner's call.
+
+**Deferred minors:**
+- an overlong secret fails late with a BLAKE2b error;
+- the under-32 rule is not tested on its own;
+- stale `seed: int` annotations;
+- no domain tag on the source label key.
