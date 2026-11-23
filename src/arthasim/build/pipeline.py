@@ -202,7 +202,7 @@ def build_population_state(config: Config, params: ParamRegistry, seed: int) -> 
         book=book, kind=kind, sector=sector,
         person_ids=person_ids, person_bank=banking.person_primary_bank, person_deposit=person_deposit,
         person_cash=person_cash, person_employer=orgs.person_employer, person_salary=person_salary,
-        person_digital=banking.person_upi, pan_like=pan_like(person_ids, initial),
+        person_digital=banking.person_upi, pan_like=pan_like(person_ids, initial, seed),
         employer_ids=employer_ids, employer_bank=banking.employer_bank, employer_deposit=employer_deposit,
         employer_payday=employer_payday, employer_payroll=employer_payroll,
         merchant_ids=merchant_ids, merchant_bank=banking.merchant_bank, merchant_deposit=merchant_deposit,

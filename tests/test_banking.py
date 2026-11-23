@@ -46,7 +46,7 @@ def test_ownership_rules():
 
 def test_identifiers_cannot_be_real():
     ids = np.arange(5000)
-    samples = {"pan": pan_like(ids, ids % 26), "aadhaar": token("u", 7, 1, ids),
+    samples = {"pan": pan_like(ids, ids % 26, 7), "aadhaar": token("u", 7, 1, ids),
                "mobile": token("m", 7, 2, ids), "ifsc": branch_code(ids % 12, ids % 2, ids % 20)}
     for name, values in samples.items():
         assert not any(REAL_FORMATS[name].match(v) for v in values)

@@ -192,7 +192,7 @@ def build_spike_state(config: Config, params: ParamRegistry, seed: int) -> World
         book=book, kind=kind, sector=sector,
         person_ids=person_ids, person_bank=person_bank, person_deposit=person_deposit,
         person_cash=person_cash, person_employer=person_employer, person_salary=person_salary,
-        person_digital=person_digital, pan_like=pan_like(person_ids, initial),
+        person_digital=person_digital, pan_like=pan_like(person_ids, initial, seed),
         employer_ids=employer_ids, employer_bank=employer_bank, employer_deposit=employer_deposit,
         employer_payday=employer_payday, employer_payroll=employer_payroll,
         merchant_ids=merchant_ids, merchant_bank=merchant_bank, merchant_deposit=merchant_deposit,
