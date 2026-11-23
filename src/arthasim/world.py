@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -13,6 +14,7 @@ import polars as pl
 
 from arthasim.build.world import EntityKind, WorldState, build_state
 from arthasim.config import Config
+from arthasim.engine.rng import KeyedSeed, Seed
 from arthasim.engine.scheduler import Counters, run_day
 from arthasim.modules.allowance import Allowance
 from arthasim.modules.base import BehaviourModule
@@ -104,10 +106,21 @@ def _household_monthly(state: WorldState, month: str) -> pl.DataFrame:
         "transfer_income_paise": beh.transfer_income})
 
 
+def _source_label(run_id: str, secret: bytes | None) -> str:
+    """The label an export gives its source run. With a release secret it is keyed, so it reveals nothing about the
+    run's seed or settings; without one it is the original unkeyed digest."""
+    if secret is None:
+        return hashlib.sha256(run_id.encode()).hexdigest()[:16]
+    return hashlib.blake2b(run_id.encode(), key=secret, digest_size=8).hexdigest()
+
+
 class World:
-    def __init__(self, config: Config, seed: int, params: ParamRegistry, state: WorldState,
-                 path: Path) -> None:
+    def __init__(self, config: Config, seed: Seed, params: ParamRegistry, state: WorldState,
+                 path: Path, run_seed: int | None = None) -> None:
+        # `seed` is what every draw and identifier is keyed with: the run seed, or a KeyedSeed when the config has a
+        # release secret. `run_seed` is the seed as typed, which names the run.
         self.config, self.seed, self.params, self.state = config, seed, params, state
+        self.run_seed = run_seed if run_seed is not None else (seed.run_seed if isinstance(seed, KeyedSeed) else seed)
         self.path = path
         self._date = config.start
         self.counters = Counters()
@@ -128,10 +141,12 @@ class World:
         if path.exists():
             raise FileExistsError(f"run directory already exists: {path}")
         params = ParamRegistry.load(_registry_path(config), overrides=config.param_overrides)
-        state = build_state(config, params, seed)
+        secret = config.secret_bytes()
+        draw: Seed = seed if secret is None else KeyedSeed.derive(seed, secret)
+        state = build_state(config, params, draw)
         path.mkdir(parents=True)
-        world = cls(config, seed, params, state, path)
-        for name, frame in _dimension_frames(state, config, seed).items():
+        world = cls(config, draw, params, state, path, run_seed=seed)
+        for name, frame in _dimension_frames(state, config, draw).items():
             world._store.write_dimension(name, frame)
         return world
 
@@ -241,7 +256,9 @@ class World:
             for name, frame in account_frames(self.state, self.config, self.seed).items():
                 self._store.write_dimension(name, frame)
         manifest: dict[str, Any] = {
-            "run_id": self.path.name, "seed": self.seed, "config_hash": self.config.hash(),
+            "run_id": self.path.name, "seed": self.run_seed, "config_hash": self.config.hash(),
+            "release_secret": self.config.release_secret is not None,
+            "source_label": _source_label(self.path.name, self.config.secret_bytes()),
             "registry_version": self.params.version(), "code_version": _CODE_VERSION,
             "tier": self.config.tier_name, "start": self.config.start.isoformat(),
             "end": (self._date - dt.timedelta(days=1)).isoformat() if self._days else None,

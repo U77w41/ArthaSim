@@ -40,3 +40,13 @@ def test_money_flow_summary_reports_dbt_and_no_income_declines(tmp_path):
     assert 0 < out["dbt_enrolled_share"]["women_21_60"] < 1
     assert 0 <= out["declined_funds_rate_no_income_households"] <= 1
     assert list(out["no_income_households_by_month"]) == ["2025-04", "2025-05"]
+
+
+def test_release_flag_reads_the_secret_from_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARTHASIM_RELEASE_SECRET", "5a" * 32)
+    r = bench.main(["--tier", "XS", "--days", "2", "--release", "--out", str(tmp_path / "a")])
+    assert r["release_secret"] is True
+    assert bench.main(["--tier", "XS", "--days", "2", "--out", str(tmp_path / "b")])["release_secret"] is False
+    monkeypatch.delenv("ARTHASIM_RELEASE_SECRET")
+    with pytest.raises(SystemExit, match="ARTHASIM_RELEASE_SECRET"):
+        bench.main(["--tier", "XS", "--days", "2", "--release", "--out", str(tmp_path / "c")])

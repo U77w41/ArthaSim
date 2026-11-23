@@ -9,6 +9,7 @@ import argparse
 import math
 import datetime as dt
 import json
+import os
 import resource
 import sys
 import time
@@ -44,10 +45,17 @@ def main(argv: list[str] | None = None) -> dict:
     ap.add_argument("--out", default="runs")
     ap.add_argument("--set", action="append", default=[], metavar="KEY=VALUE", type=parse_set,
                     help="override a registry parameter; repeatable")
+    ap.add_argument("--release", action="store_true",
+                    help="build with the release secret in the ARTHASIM_RELEASE_SECRET environment variable")
     args = ap.parse_args(argv)
 
     overrides = dict(args.set)
-    config = Config.tier(args.tier, out_dir=f"{args.out}/bench-{int(time.time())}").with_params(**overrides)
+    extra = {}
+    if args.release:
+        if not os.environ.get("ARTHASIM_RELEASE_SECRET"):
+            sys.exit("--release needs the release secret in the ARTHASIM_RELEASE_SECRET environment variable")
+        extra["release_secret"] = os.environ["ARTHASIM_RELEASE_SECRET"]
+    config = Config.tier(args.tier, out_dir=f"{args.out}/bench-{int(time.time())}", **extra).with_params(**overrides)
     started = time.perf_counter()
     world = World.build(config, seed=args.seed)
     build_seconds = time.perf_counter() - started
@@ -68,6 +76,7 @@ def main(argv: list[str] | None = None) -> dict:
         "total_seconds": round(total_seconds, 2),
         "status_share": {s: round(n / m["payments"], 4) for s, n in status.iter_rows()},
         "param_overrides": overrides,
+        "release_secret": m["release_secret"],
         "run_path": run.path,
     }
     if m.get("builder") == "population":
