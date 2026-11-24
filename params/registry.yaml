@@ -630,3 +630,17 @@
 - {id: dbt.slots, value: [24, 39], unit: 'settlement slots, inclusive (06:00 to 09:59)', as_of: 2026-11,
   source: 'APBS credits are bulk batches seen early in the day; no published time distribution (docs/sources/dbt.md)',
   status: assumption, role: input}
+- id: macro.policy_rate
+  value: {'2025-02-07': 6.25, '2025-04-09': 6.0, '2025-06-06': 5.5, '2025-12-05': 5.25}
+  unit: percent a year, RBI repo rate, by effective date
+  as_of: 2026-11
+  source: RBI MPC statements of April, June and December 2025 and February 2026; Annual Report 2024-25 for the February 2025 step (docs/sources/macro.md)
+  status: verified
+  role: input
+- id: macro.cpi_inflation
+  value: {'2025-04-01': 3.16, '2025-05-01': 2.82, '2025-06-01': 2.1, '2025-07-01': 1.61, '2025-08-01': 2.07, '2025-09-01': 1.44, '2025-10-01': 0.25, '2025-11-01': 0.71, '2025-12-01': 1.33, '2026-01-01': 2.75, '2026-02-01': 3.21, '2026-03-01': 3.4}
+  unit: percent year on year, all-India CPI (Combined), by month
+  as_of: 2026-11
+  source: MoSPI CPI releases for December 2025, January 2026 and March 2026; base 2012=100 to December 2025 and 2024=100 from January 2026, as published (docs/sources/macro.md)
+  status: verified
+  role: input

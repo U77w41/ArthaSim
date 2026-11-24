@@ -11,7 +11,8 @@ def cfg(tmp_path, **kw):
 
 def test_three_day_run_tables_and_manifest(tmp_path):
     run = World.build(cfg(tmp_path), seed=7).run(until="2025-04-03")
-    assert set(run.tables()) == {"payments", "journal", "postings", "persons", "orgs", "banks", "accounts"}
+    assert set(run.tables()) == {"payments", "journal", "postings", "persons", "orgs", "banks", "accounts",
+                                 "macro_paths", "interventions_log"}
     pay = run.table("payments").collect()
     assert pay.columns == ["payment_id", "intent_ts", "settle_ts", "rail", "status", "amount_paise",
                            "payer_account_id", "payee_account_id", "payer_bank", "payee_bank",

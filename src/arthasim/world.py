@@ -28,8 +28,9 @@ from arthasim.modules.spending import Consumption
 from arthasim.modules.spike import SpikeConsumption, SpikeIncome
 from arthasim.ledger.instruments import InstrumentType as T
 from arthasim.params import ParamRegistry
-from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, Store, content_hash, read_table,
-                                    table_files)
+from arthasim import macro as _macro
+from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, LOG_SCHEMA, META_TABLES, Store, content_hash, read_table,
+                                    table_files, write_atomic)
 
 Date = str | dt.date
 _CODE_VERSION = "0.0.1"
@@ -159,6 +160,10 @@ class World:
         """The next day to be simulated."""
         return self._date
 
+    def macro(self, series: str, day: Date) -> float | None:
+        """The value of a macro series (`policy_rate`, `cpi_inflation`) in force on a day, under the paths now set."""
+        return _macro.value_on(_macro.steps(self.params, series), _as_date(day))
+
     def watch(self, entity_id: int, callback: Callable[[dict], None]) -> None:
         """Call `callback` after each simulated day on which the entity made or received a payment attempt or had a
         life event, with that day's payments, events, end-of-day balances and, on a day the life course ran (the
@@ -246,7 +251,7 @@ class World:
         """Fact tables from the store's live hashes; dimension tables from disk."""
         live = self._store.content_hashes()
         return {t: live[t] if t in live else content_hash(self.path, t)
-                for t in FACT_TABLES + DIM_TABLES if table_files(self.path, t)}
+                for t in FACT_TABLES + DIM_TABLES + META_TABLES if table_files(self.path, t)}
 
     def _flush(self) -> None:
         self._store.flush()
@@ -255,6 +260,8 @@ class World:
             from arthasim.build.pipeline import account_frames
             for name, frame in account_frames(self.state, self.config, self.seed).items():
                 self._store.write_dimension(name, frame)
+        self._store.write_dimension("macro_paths", _macro.frame(self.params))
+        self._store.write_dimension("interventions_log", pl.DataFrame(schema=LOG_SCHEMA))
         manifest: dict[str, Any] = {
             "run_id": self.path.name, "seed": self.run_seed, "config_hash": self.config.hash(),
             "release_secret": self.config.release_secret is not None,
@@ -272,7 +279,7 @@ class World:
             manifest["districts"] = list(self.config.districts)
             manifest["scale_factor"] = sum(d.adult_population for d in districts) / self.config.persons
             manifest["build_report"] = self.state.population.report
-        (self.path / "run_manifest.json").write_text(json.dumps(manifest, indent=2))
+        write_atomic(self.path / "run_manifest.json", json.dumps(manifest, indent=2))
 
 
 class Run:
@@ -285,7 +292,7 @@ class Run:
         return cls(path, json.loads((Path(path) / "run_manifest.json").read_text()))
 
     def tables(self) -> list[str]:
-        return [t for t in FACT_TABLES + DIM_TABLES if table_files(Path(self.path), t)]
+        return [t for t in FACT_TABLES + DIM_TABLES + META_TABLES if table_files(Path(self.path), t)]
 
     def table(self, name: str) -> pl.LazyFrame:
         return read_table(Path(self.path), name)

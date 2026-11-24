@@ -27,7 +27,7 @@ def person(hh, stage, age=40, sex=c.F, income=0, helper=False, sector=-1):
 
 
 def test_registry_rows_and_count():
-    assert P.table().height == 132 and P.get("dbt.pm_kisan.amount_paise") == 200_000
+    assert P.table().height == 134 and P.get("dbt.pm_kisan.amount_paise") == 200_000
     assert P.get("dbt.bpl.headcount") == {"metro": 0.264, "rural": 0.309}
     assert [str(d) for d in P.get("dbt.pm_kisan.dates")] == ["2025-08-02", "2025-11-19", "2026-03-13", "2026-06-20"]
     dbt = P.table().filter(P.table()["id"].str.starts_with("dbt."))

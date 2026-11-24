@@ -2,6 +2,7 @@
 not grow with the size of a month."""
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
 import weakref
@@ -15,7 +16,22 @@ FACT_TABLES = ["payments", "journal", "postings", "truth_household_monthly", "li
                "entity_state_monthly", "truth_dbt_monthly", "balances_monthly"]
 DIM_TABLES = ["persons", "households", "orgs", "banks", "accounts", "instruments", "edges", "geo",
               "truth_person_latent", "bank_customers"]
+# Run metadata: one file each, rewritten at every flush.
+META_TABLES = ["macro_paths", "interventions_log"]
+LOG_SCHEMA = {"seq": pl.Int64, "kind": pl.String, "effective": pl.Date, "ends": pl.Date, "details": pl.String,
+              "affected": pl.Int64, "read_after": pl.Boolean}
 ROW_GROUP_ROWS = 1_000_000
+
+
+def write_atomic(path: Path, data: bytes | str) -> None:
+    """Write under a temporary name and move it into place, so a file shared by hard link is never changed."""
+    path = Path(path)
+    temporary = path.with_name(path.name + ".tmp")
+    if isinstance(data, str):
+        temporary.write_text(data)
+    else:
+        temporary.write_bytes(data)
+    os.replace(temporary, path)
 
 
 class Store:
@@ -80,13 +96,17 @@ class Store:
         return {t: h.digest() for t, h in self._hash.items()}
 
     def write_dimension(self, name: str, frame: pl.DataFrame) -> None:
-        frame.write_parquet(self.path / f"{name}.parquet")
+        """Dimension and metadata tables are replaced whole, never rewritten in place (see `write_atomic`)."""
+        final = self.path / f"{name}.parquet"
+        temporary = final.with_name(final.name + ".tmp")
+        frame.write_parquet(temporary)
+        os.replace(temporary, final)
 
 
 def table_files(path: Path, name: str) -> list[Path]:
     """Files of a table, facts in month then part order."""
     path = Path(path)
-    if name in DIM_TABLES:
+    if name in DIM_TABLES or name in META_TABLES:
         f = path / f"{name}.parquet"
         return [f] if f.exists() else []
     return fact_files(path, name)
