@@ -111,8 +111,8 @@
   value: 10000000
   unit: paise
   as_of: 2026-11
-  source: v1 blueprint, carried over; primary source to be pinned
-  status: unverified
+  source: 'RBI Statement on Developmental and Regulatory Policies, 8 Aug 2024 (UPI "capped at Rs 1 lakh"): https://rbi.org.in/scripts/BS_PressReleaseDisplay.aspx?prid=58449; RBI Payment System Report June 2025, para 3.3(2) (P2P stays at Rs 1 lakh); docs/sources/calibration.md'
+  status: verified
   role: input
 - id: rail.upi.tech_decline_rate
   value: 0.01
@@ -271,8 +271,8 @@
   value: {metro: 0.89, rural: 0.89}
   unit: ''
   as_of: 2026-11
-  source: Global Findex 2025 (PIB factsheet 150832)
-  status: unverified
+  source: 'World Bank Global Findex 2025 (India survey 2024): 89% of adults 15+ (rural 89.9%, urban 87.2%, Little Data Book 2025 p. 75); repeated in PIB backgrounder of 6 Aug 2025, p. 2; docs/sources/calibration.md'
+  status: verified
   role: input
 - id: inclusion.second_account_share
   value: {metro: 0.25, rural: 0.1}
@@ -408,7 +408,7 @@
   value: {2020: 0.026, 2029: 0.067}
   unit: 'share of non-farm workers, by fiscal-year start'
   as_of: 2026-11
-  source: NITI Aayog 2022, India's Booming Gig and Platform Economy
+  source: 'NITI Aayog, India''s Booming Gig and Platform Economy, 27 Jun 2022 (2.6% of the non-farm workforce in 2020-21, 6.7% projected for 2029-30); the report PDF returned 403, values read in Business Today 27 Jun 2022; docs/sources/calibration.md'
   status: unverified
   role: input
 - id: life.return.weight
@@ -429,8 +429,8 @@
   value: {private: 58, public_admin: 60}
   unit: 'years'
   as_of: 2026-11
-  source: Industrial Employment (Standing Orders) model rules; FR 56(a)
-  status: unverified
+  source: 'Industrial Employment (Standing Orders) Central Rules 1946, Schedule I-B clause 3 (58 where no age is agreed; Delhi Labour Department copy); FR 56(a) as reproduced in DoPT OM of 1 Dec 2022, para (A) (60); docs/sources/calibration.md'
+  status: verified
   role: input
 - id: life.retire.superannuation_prob
   value: 0.5
@@ -443,15 +443,15 @@
   value: 35
   unit: 'years'
   as_of: 2026-11
-  source: PLFS 2025 Table 15 (code 91 near zero from 35)
-  status: unverified
+  source: 'Chosen from PLFS 2025 Table 15 (code 91, attending education, is near zero from age 35); a modelling cut-off, not a published figure; docs/sources/calibration.md'
+  status: assumption
   role: input
 - id: life.within.farm_nonfarm
   value: 0.005
   unit: 'per month'
   as_of: 2026-11
-  source: ICRISAT VDSA (occupation changes)
-  status: unverified
+  source: 'Derived from ICRISAT Policy Brief 27 (Sep 2014), p. 4: two thirds of 2005 farmers still farming in the later year, about 0.0048 a month over seven years; no ICRISAT rate is published; docs/sources/calibration.md'
+  status: assumption
   role: input
 - id: life.within.self_gig
   value: 0.01
@@ -499,8 +499,8 @@
   value: 0.011
   unit: 'per month'
   as_of: 2026-11
-  source: Aon 2025 salary increase survey (16.2% attrition less 3.4% involuntary)
-  status: unverified
+  source: 'Derived: Aon release of 24 Feb 2026 (16.2% attrition in 2025, read) less 3.4% involuntary (People Matters, secondary); EY Future of Pay 2026 p. 19 gives 13.8% voluntary, about 0.0123 a month; docs/sources/calibration.md'
+  status: assumption
   role: input
 - id: life.switch.young
   value: {age: 30, multiplier: 1.5}
@@ -534,8 +534,8 @@
   value: 0.089
   unit: 'share'
   as_of: 2026-11
-  source: Aon 2025 salary increase survey (actual 2025)
-  status: unverified
+  source: 'Aon India salary increase survey releases of 7 Oct 2025 and 24 Feb 2026, table of actual increases (8.9% in 2025): https://www.aon.com/apac/in-the-press/asia-newsroom/2026/aon-survey-projects-slight-uptick-in-salaries-in-india-2026'
+  status: verified
   role: input
 - id: life.raise.sd
   value: 0.04
@@ -548,7 +548,7 @@
   value: 0.56
   unit: 'share of employers'
   as_of: 2026-11
-  source: Naukri appraisal survey 2023
+  source: 'Naukri appraisal survey FY 2022-23 as reported by indbiz.gov.in (search excerpt; the Naukri page returned 403). It is the share of employee respondents whose company follows an April-March cycle, not of employers raising pay in April; docs/sources/calibration.md'
   status: unverified
   role: input
 - id: life.account.open_monthly_prob
@@ -574,7 +574,8 @@
   role: input
 # Government transfers (plan 1d-1). Every source and derivation is in docs/sources/dbt.md.
 - {id: dbt.pm_kisan.amount_paise, value: 200000, unit: paise per instalment, as_of: 2026-11,
-  source: 'PM-Kisan portal; architecture appendix A dbt.pm_kisan (docs/sources/dbt.md)', status: unverified, role: input}
+  source: 'PM-KISAN scheme document (7 Feb 2019), section "Benefit to eligible SMFs": three instalments of Rs 2,000 (https://fw.pmkisan.gov.in/Documents/PMKisanSamanNidhi.pdf); PIB backgrounder of 19 Nov 2025; docs/sources/calibration.md',
+  status: verified, role: input}
 - id: dbt.pm_kisan.dates
   value: ['2025-08-02', '2025-11-19', '2026-03-13', '2026-06-20']
   unit: release dates (20th to 23rd instalments)
@@ -591,14 +592,15 @@
 - {id: dbt.taxpayer_income_paise, value: 70000000, unit: paise per year of one person's earned income, as_of: 2026-11,
   source: 'section 87A rebate limit under the new regime for 2024-25, the year PM-Kisan checks in 2025-26 (docs/sources/dbt.md)',
   status: assumption, role: input}
-- {id: dbt.old_age.min_age, value: 60, unit: years, as_of: 2026-11, source: 'NSAP IGNOAPS, PIB note November 2025',
-  status: unverified, role: input}
+- {id: dbt.old_age.min_age, value: 60, unit: years, as_of: 2026-11, source: 'NSAP IGNOAPS, PIB backgrounder of Nov 2025,
+    IGNOAPS section (60-79 and 80+): https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/nov/doc2025117686801.pdf',
+  status: verified, role: input}
 - id: dbt.old_age.central_paise
   value: [[60, 20000], [80, 50000]]
   unit: '[from age, paise per month]'
   as_of: 2026-11
-  source: NSAP IGNOAPS central assistance, PIB note November 2025 (docs/sources/dbt.md)
-  status: unverified
+  source: 'NSAP IGNOAPS central assistance, PIB backgrounder of Nov 2025, IGNOAPS section (Rs 200 a month at 60-79, Rs 500 from 80): https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/nov/doc2025117686801.pdf'
+  status: verified
   role: input
 - {id: dbt.old_age.state_topup_paise, value: 80000, unit: paise per month, as_of: 2026-11,
   source: 'state top-ups 50 to 5700 a month, average pension around 1100 in many states, PIB note November 2025 (docs/sources/dbt.md)',
@@ -644,3 +646,264 @@
   source: MoSPI CPI releases for December 2025, January 2026 and March 2026; base 2012=100 to December 2025 and 2024=100 from January 2026, as published (docs/sources/macro.md)
   status: verified
   role: input
+# Plan 1e: target and holdout rows, and the appendix A rows. Documents, tables, pages and derivations are in
+# docs/sources/calibration.md. Shares are fractions; rupee amounts are rupees (not paise) unless the id says paise.
+- {id: labour.lfpr.15plus, value: 0.593, unit: share of persons aged 15+, as_of: Jan-Dec 2025, source: 'PLFS Annual
+    Report 2025, Statement 2 (PDF p. 41, printed 11), usual status (ps+ss), all-India person; docs/sources/calibration.md',
+  status: verified, role: target}
+- {id: labour.wpr.15plus, value: 0.574, unit: share of persons aged 15+, as_of: Jan-Dec 2025, source: 'PLFS Annual
+    Report 2025, Statement 5 (PDF p. 45, printed 15), usual status (ps+ss), all-India person; docs/sources/calibration.md',
+  status: verified, role: target}
+- {id: labour.ur.15plus, value: 0.031, unit: share of the labour force aged 15+, as_of: Jan-Dec 2025, source: 'PLFS
+    Annual Report 2025, Highlights Table 3 (PDF p. 24, printed xix), usual status, all-India person; docs/sources/calibration.md',
+  status: verified, role: target}
+- id: labour.ur.by_area
+  value: {rural: 0.024, urban: 0.048}
+  unit: share of the labour force aged 15+
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Highlights Table 3 (PDF p. 24, printed xix) and Table 18.0, usual status (ps+ss), person; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: labour.ur.educated
+  value: {rural: 0.060, urban: 0.072}
+  unit: share of the labour force aged 15+ with secondary education or more
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Statement 17 (PDF p. 56, printed 26), usual status, person; all-India 6.5%; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: labour.ur.graduate_15_29
+  value: {rural: 0.215, urban: 0.232}
+  unit: share of graduates aged 15-29 in the labour force
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Table 21, UR row, ages 15-29 (PDF pp. 177 and 180, printed A-100 and A-103), usual status, person. Replaces the design doc''s "graduates 21-29: 22.2%", which the report does not contain; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: labour.share.regular_salaried
+  value: {rural: 0.141, urban: 0.476}
+  unit: share of workers
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Statement 7 (PDF p. 47, printed 17) and Table 19, usual status, all workers, person; all-India 23.6%; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: labour.share.self_employed
+  value: {rural: 0.624, urban: 0.404}
+  unit: share of workers
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Statement 7 (PDF p. 47, printed 17) and Table 19, usual status, all workers, person; all-India 56.2%; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: pay.regular_monthly
+  value: {rural: 17841, urban: 26247}
+  unit: rupees per month
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Statement 11 (PDF p. 52, printed 22) and Table 38 (PDF p. 314, printed A-237): average wage or salary in the preceding calendar month, regular wage/salaried, CWS, person; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: pay.casual_daily
+  value: {rural: 433, urban: 549}
+  unit: rupees per day
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Statement 12 (PDF p. 53, printed 23) and Table 39 (PDF p. 315, printed A-238): casual labour other than public works, CWS, person; docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: pay.self_employed_monthly
+  value: {rural: 12266, urban: 23012}
+  unit: rupees per month
+  as_of: Jan-Dec 2025
+  source: 'PLFS Annual Report 2025, Statement 13 (PDF p. 53, printed 23) and Table 40 (PDF p. 316, printed A-239): gross earnings in the last 30 days, zero earners left out, CWS, person; docs/sources/calibration.md'
+  status: verified
+  role: target
+- {id: pay.increment.corporate_mean, value: 0.091, unit: share (projected 2026 increase), as_of: '2026', source: 'EY Future
+    of Pay 2026, p. 23 (2025 actual 9.3%, 2026 projected 9.1%); Deloitte India Talent Outlook 2026 press release (9.1% for 2026);
+    Aon release of 24 Feb 2026 (9.1% for 2026). Organised sector only; the model reads life.raise.mean; docs/sources/calibration.md',
+  status: verified, role: input}
+- {id: pay.attrition.annual, value: [0.162, 0.176], unit: share a year (range across surveys), as_of: '2025', source: 'Aon
+    release of 24 Feb 2026 (16.2% in 2025); Deloitte India Talent Outlook 2026 press release (17.6% in 2025); EY Future of
+    Pay 2026, p. 19 (16.4%); docs/sources/calibration.md', status: verified, role: target}
+- {id: pay.switch_jump, value: [0.20, 0.35], unit: share pay rise on a job switch, as_of: '2025', source: 'v1 blueprint
+    range with no source; no primary report found (docs/sources/calibration.md). The model reads life.switch.pay_factor', status: assumption,
+  role: input}
+- {id: pay.skill_premium, value: [0.32, 0.47], unit: share, as_of: '2025', source: 'v1 blueprint, labelled Taggd and Aon;
+    not found in either (docs/sources/calibration.md)', status: unverified, role: input}
+- id: consumption.mpce
+  value: {rural: 4122, urban: 6996}
+  unit: rupees per person per month, Aug 2023-Jul 2024 prices
+  as_of: Aug 2023-Jul 2024
+  source: 'HCES 2023-24 Fact Sheet, Statement 1 (PDF p. 5, printed 4), without imputation of free items: https://mospi.gov.in/sites/default/files/publication_reports/HCES%20FactSheet%202023-24.pdf'
+  status: verified
+  role: target
+- id: consumption.gini
+  value: {rural: 0.237, urban: 0.284}
+  unit: Gini of MPCE across persons
+  as_of: Aug 2023-Jul 2024
+  source: 'HCES 2023-24 Fact Sheet, Statement 8 (PDF p. 14, printed 13), without imputation: https://mospi.gov.in/sites/default/files/publication_reports/HCES%20FactSheet%202023-24.pdf'
+  status: verified
+  role: target
+- id: consumption.food_share
+  value: {rural: 0.4704, urban: 0.3968}
+  unit: share of MPCE
+  as_of: Aug 2023-Jul 2024
+  source: 'HCES 2023-24 Fact Sheet, Statement 1 (PDF p. 5, printed 4), without imputation: https://mospi.gov.in/sites/default/files/publication_reports/HCES%20FactSheet%202023-24.pdf'
+  status: verified
+  role: target
+- id: consumption.hces_uprate
+  value: {rural: 1.0467, urban: 1.0501}
+  unit: price ratio
+  as_of: Apr-Dec 2025
+  source: 'Derived: mean CPI (base 2012=100) April-December 2025 over mean August 2023-July 2024, rural and urban (RBI Handbook of Statistics 2024-25 Table 162; MoSPI CPI releases); docs/sources/calibration.md'
+  status: assumption
+  role: input
+- id: wealth.household_mean
+  value: {rural: 1592379, urban: 2717081}
+  unit: rupees per household, gross assets (not net worth), as on 30 June 2018
+  as_of: '2019'
+  source: 'MoSPI press note on AIDIS, NSS 77th round, 10 Sep 2021, section A, p. 2: https://www.mospi.gov.in/sites/default/files/press_release/press_note-AIDIS-240821.pdf'
+  status: verified
+  role: target
+- {id: inclusion.pmjdy.operative_share, value: 0.7355, unit: share of PMJDY accounts, as_of: 2025-11-12, source: 'Lok
+    Sabha unstarred question 20, 1 Dec 2025, final table p. 2: 15,07,18,294 inoperative of 56,98,76,402 accounts (no customer-induced
+    transaction for two years): https://sansad.in/getFile/lsapps/loksabhaquestions/annex/186/AU20_ZAwvpe.pdf?source=lsapps',
+  status: verified, role: target}
+- {id: inclusion.pmjdy.zero_balance_share, value: 0.0915, unit: share of PMJDY accounts, as_of: 2025-11-12, source: 'Lok
+    Sabha unstarred question 20, 1 Dec 2025, final table p. 2: 5,21,65,274 zero-balance of 56,98,76,402 accounts: https://sansad.in/getFile/lsapps/loksabhaquestions/annex/186/AU20_ZAwvpe.pdf?source=lsapps',
+  status: verified, role: target}
+- {id: inclusion.pmjdy.average_balance, value: 4808, unit: rupees per account, as_of: 2025-11-12, source: 'Lok Sabha unstarred
+    question 20, 1 Dec 2025, final table p. 2, "Average Deposit (in Rs)": https://sansad.in/getFile/lsapps/loksabhaquestions/annex/186/AU20_ZAwvpe.pdf?source=lsapps',
+  status: verified, role: target}
+- {id: inclusion.debit_card_ownership, value: 0.3756, unit: share of adults aged 15+, as_of: '2024', source: 'World Bank
+    Global Findex 2025 edition (India survey 2024), indicator fin2.t.d: https://api.worldbank.org/v2/country/IND/indicator/fin2.t.d?source=28&format=json; docs/sources/calibration.md',
+  status: verified, role: target}
+- {id: population.adults_18plus, value: 1016.1, unit: million persons, as_of: 2026-03-01, source: 'Derived from MoSPI Women
+    and Men in India 2022 Statement 4.1 and 2023 Table 1.2 (Technical Group projections): persons 15+ less three fifths of
+    ages 15-19; docs/sources/calibration.md', status: assumption, role: input}
+- {id: population.urban_share, value: 0.36, unit: share of persons, as_of: 2026-03-01, source: 'Derived from MoSPI Women
+    and Men in India 2023 Table 1.1: 513.45 of 1,425.90 million; docs/sources/calibration.md', status: assumption, role: input}
+- {id: upi.volume.fy26, value: 241616.886, unit: million transactions, as_of: FY 2025-26, source: 'RBI Payment System Indicators
+    - March 2026, Part I item 2.6, column FY 2025-26 (2416168.86 lakh): https://rbi.org.in/Scripts/PSIUserView.aspx?Id=58',
+  status: verified, role: target}
+- {id: upi.value.fy26, value: 31423250, unit: rupees crore, as_of: FY 2025-26, source: 'RBI Payment System Indicators -
+    March 2026, Part I item 2.6, column FY 2025-26: https://rbi.org.in/Scripts/PSIUserView.aspx?Id=58', status: verified,
+  role: target}
+- id: upi.volume.monthly
+  value: {'2025-04': 17893.424, '2025-05': 18677.46, '2025-06': 18395.006, '2025-07': 19467.948, '2025-08': 20008.31,
+          '2025-09': 19633.433, '2025-10': 20700.921, '2025-11': 20466.979, '2025-12': 21634.668, '2026-01': 21703.445,
+          '2026-02': 20394.184, '2026-03': 22641.108}
+  unit: million transactions a month
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, monthly releases, Part I item 2.6 (lakh, divided by 10): https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: upi.value.monthly
+  value: {'2025-04': 2394926, '2025-05': 2514297, '2025-06': 2403931, '2025-07': 2508498, '2025-08': 2485473,
+          '2025-09': 2489737, '2025-10': 2727791, '2025-11': 2631633, '2025-12': 2796713, '2026-01': 2833481,
+          '2026-02': 2684229, '2026-03': 2952542}
+  unit: rupees crore a month
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, monthly releases, Part I item 2.6: https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- {id: upi.p2m.share, value: {volume: 0.63, value: 0.29}, unit: share of UPI, as_of: H1 2025, source: 'Ministry of Finance,
+    PIB release 2257087, 30 Apr 2026, section IV and Fig 7 (H1 2025, from NPCI): https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=2257087',
+  status: verified, role: target}
+- {id: upi.p2m.share_under_500, value: 0.86, unit: share of P2M transactions, as_of: FY 2025-26, source: 'Ministry of
+    Finance, PIB release 2257087, 30 Apr 2026, section "Transaction Distribution by Ticket Size": https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=2257087',
+  status: verified, role: target}
+- {id: upi.p2p.share_under_500, value: 0.59, unit: share of P2P transactions, as_of: FY 2025-26, source: 'Ministry of
+    Finance, PIB release 2257087, 30 Apr 2026, section "Transaction Distribution by Ticket Size": https://www.pib.gov.in/PressReleaseIframePage.aspx?PRID=2257087',
+  status: verified, role: target}
+- {id: upi.month_start_spike, value: 1.286, unit: ratio of mean daily UPI value, days 1-3 to days 10-25, as_of: May-Sep
+    2025, source: 'Derived from NPCI UPI Daily Product Statistics (https://www.npci.org.in/product/upi/product-statistics),
+    May to September 2025; the daily figures are in docs/sources/npci_upi_daily_2025.csv; docs/sources/calibration.md',
+  status: assumption, role: target}
+- {id: upi.lite.limits, value: {per_transaction_paise: 100000, wallet_paise: 500000}, unit: paise, as_of: 2024-12-04, source: 'RBI/2024-25/93,
+    CO.DPSS.POLC.No.S908/02-14-003/2024-25, 4 Dec 2024 (amendment to the offline small-value framework): https://rbi.org.in/Scripts/NotificationUser.aspx?Id=12752&Mode=0; docs/sources/calibration.md',
+  status: verified, role: input}
+- {id: upi.limit.listed_categories_paise, value: 50000000, unit: paise per transaction, as_of: 2025-09-15, source: 'NPCI
+    UPI OC 185B, 28 Aug 2025, Annexure I (capital markets, insurance, travel, collections and others; verified merchants):
+    https://www.npci.org.in/uploads/UPI_OC_No185_B_FY_2025_26_Addendum_to_OC_185_A_Implementation_of_higher_per_transaction_limit_for_specific_categories_in_UPI_ba517a0902.pdf',
+  status: verified, role: input}
+- {id: rtgs.minimum_paise, value: 20000000, unit: paise, as_of: 2026-10-14, source: 'RBI RTGS FAQ, Q6 (updated 14 Oct 2026):
+    https://www.rbi.org.in/Scripts/FAQView.aspx?Id=65; threshold from circular RBI/2010-11/259', status: verified, role: input}
+- {id: imps.volume.fy26, value: 4943.109, unit: million transactions, as_of: FY 2025-26, source: 'RBI Payment System Indicators
+    - March 2026, Part I item 2.3, column FY 2025-26 (49431.09 lakh): https://rbi.org.in/Scripts/PSIUserView.aspx?Id=58',
+  status: verified, role: target}
+- id: aeps.volume.monthly
+  value: {'2025-04': 92.836, '2025-05': 101.725, '2025-06': 94.462, '2025-07': 99.695, '2025-08': 124.548,
+          '2025-09': 103.496, '2025-10': 108.434, '2025-11': 104.896, '2025-12': 92.603, '2026-01': 95.667,
+          '2026-02': 86.737, '2026-03': 107.537}
+  unit: million AePS cash withdrawals a month (inter-bank only)
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, Part II item 5.1 (lakh, divided by 10): https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: cards.debit.volume_monthly
+  value: {'2025-04': 117.093, '2025-05': 115.047, '2025-06': 108.572, '2025-07': 112.061, '2025-08': 112.08,
+          '2025-09': 104.739, '2025-10': 109.625, '2025-11': 101.211, '2025-12': 104.924, '2026-01': 101.829,
+          '2026-02': 91.712, '2026-03': 101.317}
+  unit: million debit card payments a month (PoS and others)
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, Part I item 4.2 (lakh, divided by 10): https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: cards.debit.value_monthly
+  value: {'2025-04': 38113, '2025-05': 36978, '2025-06': 35463, '2025-07': 38138, '2025-08': 37406, '2025-09': 36776,
+          '2025-10': 42143, '2025-11': 34143, '2025-12': 37274, '2026-01': 37957, '2026-02': 33135, '2026-03': 37948}
+  unit: rupees crore a month
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, Part I item 4.2: https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: atm.withdrawal.volume_monthly
+  value: {'2025-04': 457.806, '2025-05': 457.988, '2025-06': 435.858, '2025-07': 444.766, '2025-08': 460.137,
+          '2025-09': 437.09, '2025-10': 463.634, '2025-11': 438.023, '2025-12': 444.402, '2026-01': 441.2,
+          '2026-02': 414.512, '2026-03': 443.999}
+  unit: million ATM cash withdrawals with debit cards a month
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, Part II item 3.2 (lakh, divided by 10): https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: atm.withdrawal.value_monthly
+  value: {'2025-04': 243494, '2025-05': 244945, '2025-06': 228735, '2025-07': 231722, '2025-08': 238883,
+          '2025-09': 229713, '2025-10': 250321, '2025-11': 234055, '2025-12': 238925, '2026-01': 239172,
+          '2026-02': 230242, '2026-03': 248419}
+  unit: rupees crore a month
+  as_of: FY 2025-26
+  source: 'RBI Payment System Indicators, Part II item 3.2: https://rbi.org.in/Scripts/PSIUserView.aspx (Id=54 to 65); docs/sources/calibration.md'
+  status: verified
+  role: target
+- id: sip.inflow.monthly
+  value: {'2025-04': [26632, 8.38], '2025-05': [26688, 8.56], '2025-06': [27269, 8.64], '2025-07': [28464, 9.11],
+          '2025-08': [28265, 8.99], '2025-09': [29361, 9.25], '2025-10': [29529, 9.45], '2025-11': [29445, 9.43],
+          '2025-12': [31002, 9.79], '2026-01': [31002, 9.92], '2026-02': [29845, 9.44], '2026-03': [32087, 9.72]}
+  unit: '[rupees crore contributed, crore contributing SIP accounts] a month'
+  as_of: FY 2025-26
+  source: 'AMFI Monthly Notes (June 2025 p. 15, Dec 2025 p. 14, Jan 2026 p. 14, June 2026 p. 15), "SIP trend" table. The design doc''s 32,490 crore across 10.06 crore accounts is September 2026; docs/sources/calibration.md'
+  status: verified
+  role: target
+- {id: cc_on_upi.value.monthly, value: 9100, unit: rupees crore a month, as_of: Apr-Oct 2024, source: 'Rajya Sabha answer
+    of 3 Dec 2024 as reported by Business Standard (Rs 63,825.80 crore for April-October 2024); no NPCI or RBI series found;
+    docs/sources/calibration.md', status: unverified, role: target}
+- id: credit.classification.buckets
+  value: {SMA-0: [1, 30], SMA-1: [31, 60], SMA-2: [61, 90], NPA_after: 90}
+  unit: days overdue
+  as_of: 2025-04-01
+  source: 'RBI Master Circular on IRACP, RBI/2025-26/13, 1 Apr 2025, paras 2.1.2 and 8.1 (https://www.rbi.org.in/Scripts/BS_ViewMasCirculardetails.aspx?id=12822); the same in the Directions of 28 Nov 2025 (para 42(1) and Resolution of Stressed Assets para 15)'
+  status: verified
+  role: input
+- {id: fraud.loss.cy24, value: {loss_crore: 22845.73, complaints: 1918865}, unit: rupees crore reported; financial-fraud
+    complaints on NCRP, as_of: CY 2024, source: 'Lok Sabha unstarred question 344, 22 Jul 2025, table on p. 3. The design
+    doc''s 22.68 lakh is all cybercrime incidents (p. 2): https://sansad.in/getFile/loksabhaquestions/annex/185/AU344_PAfnK3.pdf?source=pqals',
+  status: verified, role: target}
+- {id: fraud.actor_share, value: [0.005, 0.02], unit: share of persons, as_of: '2025', source: 'v1 blueprint range with
+    no source (docs/sources/calibration.md)', status: assumption, role: input}
+- {id: festival.diwali.upi_uplift, value: 1.031, unit: ratio of UPI value per day, October 2025 to the mean of September
+    and November 2025, as_of: Oct 2025, source: 'Derived from RBI Payment System Indicators, Part I item 2.6 (monthly UPI
+    value), Diwali 20 Oct 2025; replaces the design doc''s "+32%", which measured something else; docs/sources/calibration.md',
+  status: assumption, role: holdout}
+- id: dbt.cashout_lag
+  value: {d0_5: 0.179, d6_15: 0.234, d16_30: 0.173}
+  unit: share of DBT deposit days whose next withdrawal falls 0-5, 6-15 or 16-30 days later
+  as_of: May 2018-Mar 2019
+  source: 'Field, Rigol, Troyer Moore, Pande and Schaner, "Banking on Transparency for the Poor", CEGA working paper, 12 Aug 2022, Appendix Table A.5 Panel A (control group), p. A-12: https://escholarship.org/uc/item/6b834220'
+  status: verified
+  role: holdout

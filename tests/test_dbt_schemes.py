@@ -27,11 +27,12 @@ def person(hh, stage, age=40, sex=c.F, income=0, helper=False, sector=-1):
 
 
 def test_registry_rows_and_count():
-    assert P.table().height == 134 and P.get("dbt.pm_kisan.amount_paise") == 200_000
+    assert P.table().height == 184 and P.get("dbt.pm_kisan.amount_paise") == 200_000
     assert P.get("dbt.bpl.headcount") == {"metro": 0.264, "rural": 0.309}
     assert [str(d) for d in P.get("dbt.pm_kisan.dates")] == ["2025-08-02", "2025-11-19", "2026-03-13", "2026-06-20"]
-    dbt = P.table().filter(P.table()["id"].str.starts_with("dbt."))
-    assert dbt.height == 17 and set(dbt["status"].to_list()) == {"unverified", "assumption"}
+    dbt = P.table().filter(P.table()["id"].str.starts_with("dbt.") & (P.table()["role"] == "input"))
+    assert dbt.height == 17 and set(dbt["status"].to_list()) == {"verified", "unverified", "assumption"}
+    assert P.get("dbt.cashout_lag")["d0_5"] == 0.179            # plan 1e's holdout row
 
 
 def test_bpl_takes_the_poorest_persons_up_to_the_headcount():

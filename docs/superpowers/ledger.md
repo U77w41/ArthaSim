@@ -812,3 +812,35 @@ Both follow-up branches were combined on `claude/nostalgic-wescoff-b80231` from 
 - **Results doc.** `docs/phase1d2_results.md` keeps its 0.73 s checkpoint figure for the 1d-2 branch, with a note giving the bench figures above.
 - **Fast suite:** 465 passed (433 on `main`, plus 17 from the checkpoint branch and 15 from the minors branch).
 - **Slow gates** (`-m slow`): 8 passed in 391 s, run alongside the fast suite.
+
+# Plan 1e (calibration and validation) execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-24-arthasim-plan-1e-calibration-validation.md`. Spec: `docs/superpowers/specs/2026-11-24-calibration-validation-design.md`. Sources: `docs/sources/calibration.md`.
+Run on an Apple M5 with Python 3.12 (numpy 2.5.5, numba 0.68.1, polars 2.1.0, duckdb 2.0.1, optuna 5.1.0), from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `claude/zealous-saha-789ebb` in its own git worktree, from `main` at `29dd4a6`. Executed inline (native), with one fresh Opus review of the whole branch.
+
+The project owner handed every decision to this session: decide, ground decisions in open data, and record each as a ruling. Source research was done by eight research subagents (WebSearch and WebFetch), and two sources the fetch tool could not read (PIB release 2257087, and NPCI's daily UPI statistics for May to November 2025) were read in the built-in browser.
+
+## Reference hashes (before any change)
+
+`scripts/bench.py --tier S --days 90 --seed 7` on `main` at `29dd4a6`: 15,282,932 payment attempts, content hashes:
+
+- `payments`: `cc2f554316011cc46fa809c1e8a4a77af5152f9e05325314145d0e7c0277851f`
+- `journal`: `f0ef951399ab4341c6873f61e858b76e48c9c2066d4502500c423a4b4c50ca0f`
+- `postings`: `74ce798fcb093d2d27efca27e2f74deb94ca365bb3529a79e78a0d13d9eca27d`
+- `truth_household_monthly`: `1bd546cd83747d60c3bc8937ab202b4fac6f19bcfdf4115104cb924e7b0dbdb4`
+- `life_events`: `68f07ac0d5aa5042d7f8c64185caae7f216db871f3c0421ed0e32a40216620b1`
+- `entity_state_monthly`: `a4f33c4f10272ef69985ee2018f5b7d150c35cd2ad2f809e10cc631658f578b6`
+- `truth_dbt_monthly`: `28c0196d70c98df06093fb823a1a183ac1e80d42ac3d1061963c2f7927b5113a`
+- `balances_monthly`: `24d59862c0f10f325e1ab6cb64db90832a7c47fd8b544db6aeedbe3f46bd01cf`
+- `persons`: `d7043c310e8c25abc3c7a747c66ad6d043abef843994d482371f7e53bf101e65`
+- `households`: `2b2926e62729d8a959d5cad439fd6b3262f6d3342f528ff802ad201b3eee66f5`
+- `orgs`: `8f40e101b154f650d6b38c8e06b4563fd4c277de3002516d1a3a1ca35ea205d9`
+- `banks`: `12db6f6915295866558074d48844a6be1b2a582a6e719d07efd506a7418d8383`
+- `accounts`: `694ca5ebdb85b0e3ccb2fef142c86f705df7c2423ca3e5eb9e4f88fe989776b1`
+- `instruments`: `fa00df778819d8d5fcf593323d4f6a144bd848e99f8b71f63f2078641a854878`
+- `edges`: `62fab05a272b31009f56defce66bd2d69a216c3b9083cd32ba1e1ac6a53f7f0c`
+- `geo`: `fbd6aef95b7265da684dec8bcf92b4d7a543ba8c9c5312e1ce4cc2da036957e6`
+- `truth_person_latent`: `957e271936f03523ed5ee0b9698eefb362f7bb4188e9e31dc40c58210dab5c42`
+- `bank_customers`: `533859ad5f96f63967b0cd764f01d8bf199ca12eae0a0c6c171d6c1a686dcaa9`
+- `macro_paths`: `e2248b03c7d8a6b1f1c99d409aaca793f9ef0d22c20166867af1e1955d3a7171`
+- `interventions_log`: `eac724afc9e3fafc0941a00c17b01b63897b1ef7fe63bcc5e9b9839e09f238c7`

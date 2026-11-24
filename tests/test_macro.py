@@ -14,7 +14,7 @@ def xs(tmp_path):
 
 
 def test_registry_rows():
-    assert P.table().height == 134
+    assert P.table().height == 184
     assert macro.steps(P, "policy_rate") == [(date(2025, 2, 7), 6.25), (date(2025, 4, 9), 6.0),
                                              (date(2025, 6, 6), 5.5), (date(2025, 12, 5), 5.25)]
     cpi = macro.steps(P, "cpi_inflation")
