@@ -670,3 +670,90 @@ Suite after the fixes: 441 passed, every fast test and all eight slow gates, in 
 - The default experiment digest covers only a module's class name, so experiments differing only in a module's settings collide with `FileExistsError`.
 - Scenario DBT credits reuse the `dbt.slot` and `dbt.offset` streams, so a person paid by two schemes on one day gets equal timestamps.
 - A `SetPolicyRate` dated before the series' first step (above).
+
+# Cheaper monthly checkpoints execution ledger
+
+A follow-up to plan 1d-2's finding that a monthly checkpoint costs about 0.73 s at tier S. The task was to make it cheaper without changing any output byte.
+
+Run on an Apple M5 with Python 3.12 (numba 0.68.1, polars 2.1.0, duckdb 2.0.1), from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `claude/bold-archimedes-55440a` in its own git worktree, from `main` at `9c1ffe2`. Executed inline (native), test first. Tests: `tests/test_account_tables.py`, 17 of them.
+
+## Where a save's time went on `main`
+
+One flush at tier S at the end of April, best of three, from a profile in the scratchpad:
+
+| Step | Time |
+| :--- | ---: |
+| Flush | 577 ms |
+| — rebuilding the three account tables | 463 ms |
+| — writing them | 44 ms |
+| Content hashes of every table | 63 ms, made twice per checkpoint |
+| Pickle | 62 ms |
+
+In the rebuild, the per-id BLAKE2b digests behind account numbers, customer numbers, VPAs and terminals took about 320 ms of 610 ms under cProfile. The two-column `np.unique` for bank customers took 77 ms, and `branch_code` took 53 ms.
+
+## Findings
+
+- **Accounts open on the 1st of every month at tier S.** In the bench run, 183 accounts opened on 1 May and 232 on 1 June; DBT opened 32 and 49 of them. None opened in April. So at the May checkpoint the three tables really have changed since they were last written. A marker that only skips unchanged tables saves nothing there; the rebuild itself had to get cheaper.
+- **The identifiers of existing accounts never change.** Each is a pure function of the seed and its key. A rebuild made all of them again: 268,660 digests at the end of April.
+- **`main` hashed every dimension table twice per checkpoint,** once for the manifest and once for `checkpoint.json`. Only the account tables and the two metadata tables can change after the build.
+- **Only `life.accounts.open_accounts` changes the account tables' inputs during a run.** An AST scan of `src/` found no other writer, direct or through a local alias. A module swapped in with `SetHook(kind="module")` can write them all the same.
+
+## Changes
+
+- **A marker per account table.** `pipeline.account_marker(state)` is a SHA-256 over every array `account_frames` reads: the book, opening dates, bank links, banking flags, tokens, districts, localities and merchant acceptance. `World.build` and `World._flush` write the three tables with it. A flush rebuilds them only when the marker differs from the one the store last wrote.
+- **The store keeps the markers.** `Store.write_dimension(name, frame, marker)` records the marker with the file's stamp: device, inode, size and modification time. `Store.marker(name)` returns it only while that file is still in place. The store is never pickled, so a loaded or forked world, which gets a new store, rewrites the three tables from its own state when it opens. Rewrites still go through a temporary name and `os.replace`.
+- **An identifier memo.** `identifiers.IdentifierMemo` keeps each account number, customer number, VPA and terminal by kind and key (id and bank index). The kind names the bank codes. It serves one seed. A warm rebuild makes only the new accounts' identifiers. The memo lives on the world and is never pickled, so `world.pkl` does not grow.
+- **Dimension hashes once per file.** `Store.dimension_hash(name)` caches a dimension or metadata table's content hash by the same file stamp. A rewritten table is still hashed from disk, never from the frame in memory.
+- **The same values, made faster.**
+  - Bank customers take one `np.unique` over a single int64 per (bank, entity) pair. It gives the same rows in the same order as the two-column `np.unique`.
+  - `branch_code` formats each distinct branch once.
+  - The instruments' `kind` and `value` columns are built from object arrays instead of per-row list comprehensions.
+
+## Rulings
+
+- **The marker is a digest of the inputs, not the number of accounts or a counter** as the brief suggested. A swapped-in module that changes who has UPI without opening an account would leave a count-based marker unchanged and the instruments table stale. `test_a_banking_flag_changed_without_opening_an_account_rewrites_the_tables` guards this. A counter would also have to be bumped by every future writer. The cost at tier S is 10.5 ms a flush (best of five), over 16.0 MB of arrays and 5.4 MB of strings, and it grows with the population. `test_the_marker_reads_everything_the_account_tables_are_made_from` runs `account_frames` and the marker against a recording stand-in for the state, and fails if the tables read anything the marker does not. Cost if wrong: a stale table, which that test and the byte comparisons below are there to catch.
+- **Object arrays (tokens, bank codes) are hashed by content.** They are joined by NUL when no string holds one, else hashed as their `repr`, with a tag byte and the count. Their pointers would miss an in-place change. Cost if wrong: none found; `test_the_marker_tells_apart_string_lists_that_join_alike` covers the encoding.
+- **`macro_paths` and `interventions_log` are still rewritten at every flush.** They are a few hundred bytes each. Skipping them would need markers for the registry and the log, for a few milliseconds. Cost if wrong: a few milliseconds a flush.
+- **Rewritten tables are hashed from disk.** Hashing the frame in memory would save about 32 ms in a month where accounts opened, but disk stays the only source for dimension hashes. Cost if wrong: 32 ms a month.
+- **Five of the 17 tests passed at RED by design.** They guard behaviour the change must keep:
+  - rewriting when an account opens;
+  - rewriting when a flag changes;
+  - month ends matching a full rebuild;
+  - the forced rewrite on load and fork;
+  - the per-row `branch_code` format.
+
+  `test_the_marker_tells_apart_string_lists_that_join_alike` was written after its helper. It was then run against a naive join and failed. It also caught a real gap: `[]` and `[""]` encoded alike until the count was added. Cost if wrong: none.
+
+## Measured gain
+
+`scripts/bench.py --tier S --days 90 --seed 7`. The first `main` run came first, alone; the other four were interleaved, at a load average of 3 to 6:
+
+| Run | `checkpoint_seconds` (two checkpoints) | `total_seconds` | `build_seconds` |
+| :--- | ---: | ---: | ---: |
+| `main` | 1.56 | 25.11 | 2.20 |
+| branch | 0.47 | 21.52 | 1.60 |
+| `main` | 1.47 | 23.10 | 1.67 |
+| branch | 0.48 | 21.50 | 1.59 |
+| `main` | 1.46 | 22.86 | 1.68 |
+
+Each checkpoint's steps, from two runs of each to 29 June, in ms:
+
+| | `main`, end of April | branch, end of April | `main`, end of May | branch, end of May |
+| :--- | ---: | ---: | ---: | ---: |
+| Whole save | 729, 739 | 189, 174 | 748, 866 | 306, 311 |
+| Flush | 584, 586 | 107, 92 | 590, 701 | 217, 219 |
+| Content hashes for `checkpoint.json` | 65, 66 | 1.0, 1.0 | 67, 68 | 1.3, 1.3 |
+| Pickle | 60, 65 | 61, 62 | 59, 63 | 56, 59 |
+| Hard links | 18, 19 | 18, 19 | 30, 31 | 30, 30 |
+
+The end of April skips the rebuild, since no account opened after the build. Its flush still hashes every dimension once (69 to 85 ms), because it is the world's first flush. The end of May rebuilds with a warm memo. Against a month's simulation at tier S (6.6 s in `docs/phase1d2_results.md`), a checkpoint falls from about 11% to 3–5%. What is left is the pickle (about 60 ms), the hard links (18 to 30 ms) and, in a month where accounts opened, a flush of about 220 ms: the warm rebuild, writing the three tables and hashing them from disk.
+
+Best of five at the end of April, on a quieter machine: the marker takes 10.5 ms, and a rebuild with a warm memo takes 53.7 ms, against 463 ms for a rebuild on `main`.
+
+## Verification
+
+- **Content hashes.** All 20 tables in every bench run equal `main`'s (`content_hash` from `bench.py`). So does every other field the bench prints except timings, memory and the run path.
+- **Bytes.** Every Parquet file in the branch's bench folder is byte-identical to `main`'s: 84 in the run and 96 in the two checkpoints' `run/` folders. The 5 JSON files (3 manifests, 2 `checkpoint.json`) are equal once the fields that also differ between two `main` runs are left out: `run_id`, `source_label`, `wall_seconds`, `config_hash` and `config`. `world.pkl` was not compared, since it holds timings.
+- **In the tests,** a warm memo's tables equal a plain rebuild's byte for byte, after new accounts open. The flushed tables equal a full rebuild at each step and at month ends, and each checkpoint's tables equal those its loaded world rewrites.
+- **Fast suite:** 450 passed (433 before, plus 17).
+- **Slow gates** (`-m slow`): 8 passed in 222 s.

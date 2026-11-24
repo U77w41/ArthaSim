@@ -1,8 +1,9 @@
 """Population builder: runs the build steps and fills the WorldState the day loop reads."""
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import polars as pl
@@ -12,7 +13,8 @@ from arthasim.build.attributes import Attributes, attach_attributes
 from arthasim.build.banking import Banking, assign_banking
 from arthasim.build.graph import build_edges
 from arthasim.build.households import Households, form_households
-from arthasim.build.identifiers import account_no, branch_code, customer_no, pan_like, terminal, token, vpa
+from arthasim.build.identifiers import (IdentifierMemo, account_no, branch_code, customer_no, pan_like, terminal,
+                                        token, vpa)
 from arthasim.build.marginals import DistrictMarginals, load_district, load_priors
 from arthasim.build.orgs import Orgs, build_orgs
 from arthasim.build.population import Persons, synthesise_persons
@@ -31,6 +33,8 @@ from arthasim.params import ParamRegistry
 
 LATENT = ("domain_skill", "digital_literacy", "financial_literacy", "risk_appetite", "habit_strength",
           "price_sensitivity", "trust_in_offers")
+# The tables `account_frames` makes. Accounts open during a run, so a flush rewrites them when they change.
+ACCOUNT_TABLES = ("accounts", "instruments", "bank_customers")
 
 
 @dataclass
@@ -246,7 +250,8 @@ def _nullable(values: np.ndarray, present: np.ndarray, dtype) -> pl.Series:
     return pl.Series(np.where(present, values, None).tolist(), dtype=dtype)
 
 
-def population_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl.DataFrame]:
+def population_frames(state: WorldState, config: Config, seed: int,
+                      memo: IdentifierMemo | None = None) -> dict[str, pl.DataFrame]:
     """Dimension tables for a population build. Category columns hold names."""
     b: PopulationBundle = state.population
     p, h, a, o, k = b.persons, b.households, b.attributes, b.orgs, b.banking
@@ -302,7 +307,7 @@ def population_frames(state: WorldState, config: Config, seed: int) -> dict[str,
         "archetype": k.bank_archetype.tolist() + [None] + ["nbfc"] * len(b.nbfc_ids)},
         schema={"entity_id": pl.Int64, "bank_code": pl.String, "kind": pl.String, "archetype": pl.String})
 
-    frames = account_frames(state, config, seed)
+    frames = account_frames(state, config, seed, memo)
 
     edges = b.edges.rename({"src": "src_entity_id", "dst": "dst_entity_id"})
     L = config.localities_per_district
@@ -326,8 +331,63 @@ def _birth_year(age: np.ndarray, birth_month: np.ndarray, start) -> np.ndarray:
     return (start.year - age.astype(np.int64) - (birth_month.astype(np.int64) > start.month)).astype(np.int64)
 
 
-def account_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl.DataFrame]:
-    """The accounts and instruments tables from live state: every account so far, with its opening date."""
+def account_marker(state: WorldState) -> bytes:
+    """A digest of everything `account_frames` reads from the state. Equal markers mean equal tables, so a flush
+    can leave the tables it wrote last in place. An input that `account_frames` starts reading belongs here too; a
+    test checks that it reads nothing else. The seed is left out: it is fixed for a world, and a store serves one."""
+    b: PopulationBundle = state.population
+    p, h, k, o = b.persons, b.households, b.banking, b.orgs
+    book = state.book
+    out = hashlib.sha256(len(book).to_bytes(8, "little"))
+    out.update(int(state.boundary_deposit).to_bytes(8, "little", signed=True))
+    for values in (book.type, book.holder, book.issuer, book.opening, state.account_opened_on, state.kind,
+                   state.person_deposit, state.bank_vault, state.bank_of_account, state.bank_codes,
+                   state.merchant_deposit, state.biller_deposit, k.person_has_account, k.person_basic_account,
+                   k.person_upi, k.person_has_card, k.person_has_mobile, k.person_primary_bank, k.person_second_bank,
+                   b.person_second_deposit, b.tokens["device"], b.tokens["card"], b.tokens["mobile"], p.district,
+                   h.locality, h.household_of_person, o.merchant_accepts_upi, o.merchant_accepts_card):
+        a = np.asarray(values)
+        out.update(f"{a.dtype.str}{a.shape}".encode())
+        out.update(_object_bytes(a.ravel().tolist()) if a.dtype == object
+                   else np.ascontiguousarray(a).reshape(-1).view(np.uint8))
+    return out.digest()
+
+
+def _object_bytes(values: list) -> bytes:
+    """Bytes that only these values give: their count, then the strings joined by NUL when no string holds one (so
+    the split is unambiguous), else the list's repr. A first byte tells the two apart."""
+    try:
+        joined = "\x00".join(values)
+    except TypeError:                                   # not all strings
+        joined = None
+    if joined is not None and joined.count("\x00") == max(len(values) - 1, 0):
+        return b"j%d:" % len(values) + joined.encode("utf-8", "surrogatepass")
+    return b"r" + repr(values).encode()
+
+
+def _identifiers(memo: IdentifierMemo | None, seed: int, codes: np.ndarray) -> Callable:
+    """`made(kind, ids, banks, make)`: the identifiers `make(rows)` makes for every row, taken from the memo where
+    it has them. The memo keys them by id and bank index (and the kind names the bank codes they may spell)."""
+    n_banks = len(codes)
+    spelled = "|".join(codes.tolist())
+
+    def made(kind: str, ids: np.ndarray, banks: np.ndarray | None, make: Callable) -> np.ndarray:
+        if memo is None:
+            return make(slice(None))
+        keys = np.asarray(ids, dtype=np.int64)
+        if banks is not None:
+            banks = np.asarray(banks, dtype=np.int64)
+            if banks.size and (banks.min() < 0 or banks.max() >= n_banks):
+                return make(slice(None))                # one key per (id, bank) needs a bank index in range
+            keys = keys * n_banks + banks
+        return memo.strings(seed, f"{kind}/{spelled}", keys, make)
+    return made
+
+
+def account_frames(state: WorldState, config: Config, seed: int,
+                   memo: IdentifierMemo | None = None) -> dict[str, pl.DataFrame]:
+    """The accounts and instruments tables from live state: every account so far, with its opening date. With a
+    memo, identifiers it already holds for this seed are reused rather than made again (they are the same)."""
     b: PopulationBundle = state.population
     p, h, k = b.persons, b.households, b.banking
     book = state.book
@@ -350,10 +410,14 @@ def account_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl
         "status": pl.Series(["ACTIVE"] * len(book), dtype=pl.String),
         "opening_balance_paise": book.opening.astype(np.int64)})
 
+    bank = state.bank_of_account
+    codes = state.bank_codes
+    made = _identifiers(memo, seed, codes)
     upi, card, mobile = k.person_upi, k.person_has_card, k.person_has_mobile & banked
     second = b.person_second_deposit >= 0
+    p_upi, p_bank = state.person_deposit[upi], k.person_primary_bank[upi]
     parts = [
-        ("VPA", state.person_deposit[upi], vpa(seed, state.person_deposit[upi], k.person_primary_bank[upi])),
+        ("VPA", p_upi, made("vpa", p_upi, p_bank, lambda r: vpa(seed, p_upi[r], p_bank[r]))),
         ("DEVICE", state.person_deposit[upi], b.tokens["device"][upi]),
         ("DEBIT_CARD", state.person_deposit[card], b.tokens["card"][card]),
         ("MOBILE", state.person_deposit[mobile], b.tokens["mobile"][mobile]),
@@ -362,34 +426,42 @@ def account_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl
     ]
     # Handles every deposit account has or that organisations hold (spec section 3).
     deposits = np.flatnonzero(book.type == T.DEPOSIT)
-    bank = state.bank_of_account
-    codes = state.bank_codes
     m_upi = state.merchant_deposit[b.orgs.merchant_accepts_upi]
     m_card = state.merchant_deposit[b.orgs.merchant_accepts_card]
+    billers = state.biller_deposit
     parts += [
-        ("ACCOUNT_NO", deposits, account_no(seed, deposits, codes[bank[deposits]])),
-        ("VPA", m_upi, vpa(seed, m_upi, bank[m_upi], prefix="m")),
-        ("VPA", state.biller_deposit, vpa(seed, state.biller_deposit, bank[state.biller_deposit], prefix="b")),
-        ("TERMINAL", m_card, terminal(seed, m_card)),
+        ("ACCOUNT_NO", deposits, made("account_no", deposits, bank[deposits],
+                                      lambda r: account_no(seed, deposits[r], codes[bank[deposits[r]]]))),
+        ("VPA", m_upi, made("vpa_m", m_upi, bank[m_upi], lambda r: vpa(seed, m_upi[r], bank[m_upi[r]], prefix="m"))),
+        ("VPA", billers, made("vpa_b", billers, bank[billers],
+                              lambda r: vpa(seed, billers[r], bank[billers[r]], prefix="b"))),
+        ("TERMINAL", m_card, made("terminal", m_card, None, lambda r: terminal(seed, m_card[r]))),
     ]
     account_id = np.concatenate([x[1] for x in parts])
+    kind = np.repeat(np.array([x[0] for x in parts], dtype=object), [x[1].size for x in parts])
+    value = np.concatenate([np.asarray(x[2], dtype=object) for x in parts])
     instruments = pl.DataFrame({
         "instrument_id": np.arange(account_id.size, dtype=np.int64), "account_id": account_id,
-        "kind": pl.Series([x[0] for x in parts for _ in range(x[1].size)], dtype=pl.String),
-        "value": pl.Series([v for x in parts for v in x[2].tolist()], dtype=pl.String)})
-    return {"accounts": accounts, "instruments": instruments, "bank_customers": _bank_customers(state, seed)}
+        "kind": pl.Series(kind.tolist(), dtype=pl.String), "value": pl.Series(value.tolist(), dtype=pl.String)})
+    return {"accounts": accounts, "instruments": instruments, "bank_customers": _bank_customers(state, seed, memo)}
 
 
-def _bank_customers(state: WorldState, seed: int) -> pl.DataFrame:
+def _bank_customers(state: WorldState, seed: int, memo: IdentifierMemo | None = None) -> pl.DataFrame:
     """One row per (bank, entity) holding a deposit at that bank; the boundary bank has no customers."""
     book = state.book
     deposits = np.flatnonzero(book.type == T.DEPOSIT)
     holder, bank = book.holder[deposits], state.bank_of_account[deposits]
     customer_kinds = [EntityKind.PERSON, EntityKind.EMPLOYER, EntityKind.MERCHANT, EntityKind.BILLER]
     keep = (bank < len(state.bank_codes) - 1) & np.isin(state.kind[holder], customer_kinds)
-    pairs = np.unique(np.stack([bank[keep], holder[keep]], axis=1), axis=0)      # sorted by bank, then entity
-    bank, entity = pairs[:, 0], pairs[:, 1]
+    holder, bank = holder[keep], bank[keep]
+    # The distinct pairs sorted by bank, then entity: one int64 per pair keeps the sort one-dimensional.
+    low = int(holder.min()) if holder.size else 0
+    span = int(holder.max()) - low + 1 if holder.size else 1
+    pair = np.unique(bank * span + (holder - low))
+    bank, entity = pair // span, pair % span + low
     codes = state.bank_codes[bank]
+    made = _identifiers(memo, seed, state.bank_codes)
+    number = made("customer_no", entity, bank, lambda r: customer_no(seed, entity[r], bank[r], codes[r]))
     return pl.DataFrame({"bank_code": pl.Series(codes.tolist(), dtype=pl.String), "entity_id": entity,
-                         "customer_no": pl.Series(customer_no(seed, entity, bank, codes).tolist(), dtype=pl.String)},
+                         "customer_no": pl.Series(number.tolist(), dtype=pl.String)},
                         schema={"bank_code": pl.String, "entity_id": pl.Int64, "customer_no": pl.String})

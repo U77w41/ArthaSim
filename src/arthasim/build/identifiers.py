@@ -76,9 +76,20 @@ def token(prefix: str, seed: Seed, stream: int, ids) -> np.ndarray:
 
 
 def branch_code(bank_index, district_index, locality) -> np.ndarray:
-    """IFSC-shaped, but starts SY plus two digits, which a real IFSC cannot."""
-    rows = zip(np.asarray(bank_index).tolist(), np.asarray(district_index).tolist(), np.asarray(locality).tolist())
-    return np.array([f"SY{b + 1:02d}0{d:02d}{loc:04d}" for b, d, loc in rows], dtype=object)
+    """IFSC-shaped, but starts SY plus two digits, which a real IFSC cannot. Each distinct branch is formatted
+    once: there are few branches and many accounts."""
+    b, d, loc = (np.asarray(x, dtype=np.int64).ravel() for x in (bank_index, district_index, locality))
+    if b.size == 0:
+        return np.empty(0, dtype=object)
+    lo = [int(x.min()) for x in (b, d, loc)]
+    span = [int(x.max()) - m + 1 for x, m in zip((b, d, loc), lo)]
+    if span[0] * span[1] * span[2] >= 1 << 62:         # one int64 per branch would overflow: format every row
+        rows = zip(b.tolist(), d.tolist(), loc.tolist())
+        return np.array([f"SY{x + 1:02d}0{y:02d}{z:04d}" for x, y, z in rows], dtype=object)
+    key = ((b - lo[0]) * span[1] + (d - lo[1])) * span[2] + (loc - lo[2])
+    _, first, inverse = np.unique(key, return_index=True, return_inverse=True)
+    rows = zip(b[first].tolist(), d[first].tolist(), loc[first].tolist())
+    return np.array([f"SY{x + 1:02d}0{y:02d}{z:04d}" for x, y, z in rows], dtype=object)[inverse.ravel()]
 
 
 def vpa(seed: Seed, account_ids, bank_index, prefix: str = "p") -> np.ndarray:
@@ -99,6 +110,36 @@ def customer_no(seed: Seed, entity_ids, bank_index, bank_codes) -> np.ndarray:
     key = np.asarray(entity_ids, dtype=np.int64) * 64 + np.asarray(bank_index, dtype=np.int64)
     values = keyed_bits(seed, rng.stream_id("id.customer_no"), key)
     return np.array([f"CIF{c}-{v:016x}" for c, v in zip(np.asarray(bank_codes).tolist(), values)], dtype=object)
+
+
+class IdentifierMemo:
+    """Identifiers already made, by kind and int64 key, so a rebuild of the account tables makes only new ones.
+    Each identifier is a pure function of the seed and its key, so a kept string equals a newly made one. A memo
+    serves one seed: asked with another, it starts again."""
+
+    def __init__(self) -> None:
+        self._seed: Seed | None = None
+        self._kept: dict[str, tuple[np.ndarray, np.ndarray]] = {}       # kind -> (sorted keys, identifiers)
+
+    def strings(self, seed: Seed, kind: str, keys, make) -> np.ndarray:
+        """The identifier for each key. `make(rows)` makes those of `keys[rows]` (an index array) not kept yet."""
+        if self._seed is None or self._seed != seed:
+            self._seed, self._kept = seed, {}
+        keys = np.asarray(keys, dtype=np.int64)
+        known, values = self._kept.get(kind, (np.empty(0, dtype=np.int64), np.empty(0, dtype=object)))
+        pos = np.searchsorted(known, keys)
+        hit = pos < known.size
+        hit[hit] = known[pos[hit]] == keys[hit]
+        out = np.empty(keys.size, dtype=object)
+        out[hit] = values[pos[hit]]
+        miss = np.flatnonzero(~hit)
+        if miss.size:
+            made = np.asarray(make(miss), dtype=object)
+            out[miss] = made
+            new, first = np.unique(keys[miss], return_index=True)
+            at = np.searchsorted(known, new)
+            self._kept[kind] = (np.insert(known, at, new), np.insert(values, at, made[first]))
+        return out
 
 
 def terminal(seed: Seed, account_ids) -> np.ndarray:

@@ -14,6 +14,7 @@ import duckdb
 import numpy as np
 import polars as pl
 
+from arthasim.build.identifiers import IdentifierMemo
 from arthasim.build.world import EntityKind, WorldState, build_state
 from arthasim.config import Config
 from arthasim.engine.rng import KeyedSeed, Seed
@@ -54,10 +55,11 @@ def _registry_path(config: Config) -> Path:
     return Path(__file__).resolve().parents[2] / path
 
 
-def _dimension_frames(state: WorldState, config: Config, seed: int) -> dict[str, pl.DataFrame]:
+def _dimension_frames(state: WorldState, config: Config, seed: int,
+                      memo: IdentifierMemo | None = None) -> dict[str, pl.DataFrame]:
     if state.population is not None:
         from arthasim.build.pipeline import population_frames
-        return population_frames(state, config, seed)
+        return population_frames(state, config, seed, memo)
     return _spike_frames(state, config)
 
 
@@ -143,6 +145,7 @@ class World:
         self._forked_from: dict[str, str] | None = None
         self.checkpoint_seconds = 0.0            # time spent writing monthly checkpoints (not in wall_seconds)
         self.active = Active()                   # applied interventions and their state
+        self._ids = IdentifierMemo()             # account identifiers made so far (never pickled)
 
     @staticmethod
     def default_modules(population: bool) -> list[BehaviourModule]:
@@ -153,11 +156,12 @@ class World:
         return [SpikeIncome(), SpikeConsumption()]
 
     def __getstate__(self) -> dict[str, Any]:
-        """What a checkpoint holds: everything but the store, the watchers, the release secret and the keys derived
-        from it (the seed is kept as the run seed only)."""
+        """What a checkpoint holds: everything but the store, the watchers, the identifier memo, the release secret
+        and the keys derived from it (the seed is kept as the run seed only)."""
         state = dict(self.__dict__)
         state.pop("_store", None)
         state.pop("_watchers", None)
+        state.pop("_ids", None)
         state["seed"] = self.run_seed
         state["config"] = self.config.model_copy(update={"release_secret": None})
         return state
@@ -166,6 +170,7 @@ class World:
         self.__dict__.update(state)
         self._store = None
         self._watchers = {}
+        self._ids = IdentifierMemo()
 
     @classmethod
     def build(cls, config: Config, seed: int, path: str | Path | None = None, checkpoints: bool = True) -> "World":
@@ -181,9 +186,19 @@ class World:
         path.mkdir(parents=True)
         world = cls(config, draw, params, state, path, run_seed=seed)
         world._checkpoints = bool(checkpoints)
-        for name, frame in _dimension_frames(state, config, draw).items():
-            world._store.write_dimension(name, frame)
+        marker = world._account_marker()
+        for name, frame in _dimension_frames(state, config, draw, world._ids).items():
+            world._store.write_dimension(name, frame, marker=marker.get(name))
         return world
+
+    def _account_marker(self) -> dict[str, bytes]:
+        """The marker of each account table as the state now stands (none for a spike world, which writes its
+        accounts once)."""
+        if self.state.population is None:
+            return {}
+        from arthasim.build.pipeline import ACCOUNT_TABLES, account_marker
+        marker = account_marker(self.state)
+        return {name: marker for name in ACCOUNT_TABLES}
 
     @property
     def label(self) -> str:
@@ -403,18 +418,21 @@ class World:
             self._notify(day, payments, frames)
 
     def _content_hashes(self) -> dict[str, str]:
-        """Fact tables from the store's live hashes; dimension tables from disk."""
+        """Fact tables from the store's live hashes; dimension and metadata tables from disk, once per file."""
         live = self._store.content_hashes()
-        return {t: live[t] if t in live else content_hash(self.path, t)
+        return {t: live[t] if t in live else (content_hash(self.path, t) if t in FACT_TABLES
+                                              else self._store.dimension_hash(t))
                 for t in FACT_TABLES + DIM_TABLES + META_TABLES if table_files(self.path, t)}
 
     def _flush(self) -> None:
         self._store.flush()
-        if self.state.population is not None:
-            # Accounts opened during the run join the accounts and instruments tables.
+        marker = self._account_marker()
+        if any(self._store.marker(name) != m for name, m in marker.items()):
+            # Accounts opened during the run join the accounts and instruments tables. A table whose marker is
+            # unchanged is what a rebuild would write, so it stays; a new store (a load or a fork) has none.
             from arthasim.build.pipeline import account_frames
-            for name, frame in account_frames(self.state, self.config, self.seed).items():
-                self._store.write_dimension(name, frame)
+            for name, frame in account_frames(self.state, self.config, self.seed, self._ids).items():
+                self._store.write_dimension(name, frame, marker=marker[name])
         self._store.write_dimension("macro_paths", _macro.frame(self.params))
         self._store.write_dimension("interventions_log", self.active.log_frame())
         manifest: dict[str, Any] = {

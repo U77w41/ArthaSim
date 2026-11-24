@@ -48,6 +48,8 @@ class Store:
         self._month: dict[str, str] = {}
         self._hash: dict[str, RunningHash] = {}
         self.max_queued_rows = 0
+        self._markers: dict[str, tuple[tuple, object]] = {}     # name -> (file stamp, marker) as last written
+        self._dim_hash: dict[str, tuple[tuple, str]] = {}       # name -> (file stamp, content hash)
         # The open month's seed-1 row hashes wait here, outside the run folder; removed with the store or at exit.
         self.spool_dir = Path(tempfile.mkdtemp(prefix="arthasim-spool-"))
         self._cleanup = weakref.finalize(self, shutil.rmtree, str(self.spool_dir), True)
@@ -100,12 +102,40 @@ class Store:
         """Live content hashes of the fact tables written so far."""
         return {t: h.digest() for t, h in self._hash.items()}
 
-    def write_dimension(self, name: str, frame: pl.DataFrame) -> None:
-        """Dimension and metadata tables are replaced whole, never rewritten in place (see `write_atomic`)."""
+    def write_dimension(self, name: str, frame: pl.DataFrame, marker: object = None) -> None:
+        """Dimension and metadata tables are replaced whole, never rewritten in place (see `write_atomic`).
+        `marker` stands for what the frame was made from; `marker(name)` returns it while the file stays."""
         final = self.path / f"{name}.parquet"
         temporary = final.with_name(final.name + ".tmp")
         frame.write_parquet(temporary)
         os.replace(temporary, final)
+        if marker is None:
+            self._markers.pop(name, None)
+        else:
+            self._markers[name] = (self._stamp(name), marker)
+
+    def marker(self, name: str) -> object:
+        """The marker the table was last written with, or None: never given one, or the file has since been
+        replaced or removed."""
+        kept = self._markers.get(name)
+        return kept[1] if kept is not None and kept[0] == self._stamp(name) else None
+
+    def dimension_hash(self, name: str) -> str:
+        """A dimension or metadata table's content hash, read from disk once per file. A file is replaced whole,
+        never changed in place, so the same device, inode, size and modification time mean the same content."""
+        stamp = self._stamp(name)
+        kept = self._dim_hash.get(name)
+        if stamp is None or kept is None or kept[0] != stamp:
+            kept = (stamp, content_hash(self.path, name, fact=False))
+            self._dim_hash[name] = kept
+        return kept[1]
+
+    def _stamp(self, name: str) -> tuple | None:
+        try:
+            st = (self.path / f"{name}.parquet").stat()
+        except FileNotFoundError:
+            return None
+        return st.st_dev, st.st_ino, st.st_size, st.st_mtime_ns
 
 
 def table_files(path: Path, name: str, months: tuple[str, str] | None = None) -> list[Path]:
