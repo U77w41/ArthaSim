@@ -1,0 +1,177 @@
+# The core validation suite (plan 1e): the phase 1 rows of architecture section 15.3.
+# Every check names its kind, the statistic (arthasim/statistics.py) or hard check (arthasim/checks.py), the
+# registry row it compares with, the comparison, the tolerance and why that tolerance. Tolerances were fixed in the
+# spec (docs/superpowers/specs/2026-11-24-calibration-validation-design.md) before any calibrated run.
+# compare: relative |sim/target - 1| <= tolerance; absolute |sim - target| <= tolerance; at_most sim <= tolerance.
+# gap: set only for a check the model cannot pass (a missing mechanism or an input this plan does not change),
+# with the ledger ruling. A gap still runs and still fails.
+checks:
+# Hard checks -------------------------------------------------------------------------------------------------------
+- {id: ledger, kind: hard, statistic: ledger, why: "Architecture section 7.3; a stored run must still satisfy every invariant the run checked daily."}
+- {id: determinism, kind: hard, statistic: determinism, why: "Same seed and config give identical output (section 15.3)."}
+- {id: identifiers, kind: hard, statistic: identifiers, why: "No synthetic identifier matches a real format (section 5.3)."}
+
+# Labour stocks -------------------------------------------------------------------------------------------------------
+- id: labour.stages
+  kind: target
+  compare: at_most
+  tolerance: 0.02
+  why: "Largest gap between simulated and target life-stage shares (PLFS Table 15 with the CWS bulletins, params/lifecourse/plfs_2025.yaml). Alignment rounds to whole persons and floors probabilities; 2 points is the size of a month's CWS sampling movement in the bulletins."
+- id: labour.ur
+  kind: target
+  target: labour.ur.by_area
+  compare: absolute
+  tolerance: 0.01
+  why: "Usual-status unemployment; persons are 18+ against PLFS's 15+, and 15-17s are mostly students."
+- id: labour.ur.educated
+  kind: target
+  target: labour.ur.educated
+  compare: absolute
+  tolerance: 0.02
+  why: "Smaller groups than the overall rate."
+- id: labour.ur.graduate_15_29
+  kind: target
+  target: labour.ur.graduate_15_29
+  compare: absolute
+  tolerance: 0.03
+  why: "Small group; simulated ages 18-29 against PLFS's 15-29."
+- id: labour.share.regular_salaried
+  kind: target
+  target: labour.share.regular_salaried
+  compare: absolute
+  tolerance: 0.03
+  why: "All ages against 18+; the model's helper flag."
+- id: labour.share.self_employed
+  kind: target
+  target: labour.share.self_employed
+  compare: absolute
+  tolerance: 0.03
+  why: "All ages against 18+; the model's helper flag."
+
+# Pay and consumption -------------------------------------------------------------------------------------------------
+- id: pay.regular_monthly
+  kind: target
+  target: pay.regular_monthly
+  compare: relative
+  tolerance: 0.10
+  why: "Large PLFS samples (44,000 and 80,000 employees); fitted."
+- id: pay.casual_daily
+  kind: target
+  target: pay.casual_daily
+  compare: relative
+  tolerance: 0.10
+  why: "Fitted; the days-worked conversion (income.pay_events_per_month) is the model's own."
+- id: pay.self_employed_monthly
+  kind: target
+  target: pay.self_employed_monthly
+  compare: relative
+  tolerance: 0.15
+  why: "The model's three stages (self-employed, gig, farm) against PLFS's one self-employed group."
+- id: consumption.mpce
+  kind: target
+  target: consumption.mpce
+  compare: relative
+  tolerance: 0.10
+  why: "Fitted. HCES counts home-grown produce, which the model does not pay for; uprated to 2025 prices by consumption.hces_uprate."
+- id: consumption.gini
+  kind: target
+  target: consumption.gini
+  compare: absolute
+  tolerance: 0.03
+  why: "Fitted; one survey year against a few simulated months."
+- id: consumption.food_share
+  kind: target
+  target: consumption.food_share
+  compare: absolute
+  tolerance: 0.03
+  why: "Not fitted; the category shares are inputs."
+
+# Payments ------------------------------------------------------------------------------------------------------------
+- id: payments.upi_p2m_per_adult
+  kind: target
+  target: upi.volume.monthly
+  compare: relative
+  tolerance: 0.25
+  why: "Two archetype districts against India; a derived adult population; P2M also includes businesses paying merchants."
+- id: payments.upi_p2p_per_adult
+  kind: target
+  target: upi.volume.monthly
+  compare: relative
+  tolerance: 0.25
+  why: "As for P2M."
+- id: payments.debit_card_per_adult
+  kind: target
+  target: cards.debit.volume_monthly
+  compare: relative
+  tolerance: 0.25
+  why: "As for UPI."
+- id: payments.atm_per_adult
+  kind: target
+  target: atm.withdrawal.volume_monthly
+  compare: relative
+  tolerance: 0.25
+  why: "As for UPI."
+- id: payments.atm_ticket
+  kind: target
+  target: atm.withdrawal.value_monthly
+  compare: relative
+  tolerance: 0.20
+  why: "Fitted."
+- id: payments.debit_card_ticket
+  kind: target
+  target: cards.debit.value_monthly
+  compare: relative
+  tolerance: 0.25
+  why: "Not fitted."
+- id: payments.p2m_under_500
+  kind: target
+  target: upi.p2m.share_under_500
+  compare: absolute
+  tolerance: 0.05
+  why: "Fitted through ticket dispersion."
+- id: payments.p2p_under_500
+  kind: target
+  target: upi.p2p.share_under_500
+  compare: absolute
+  tolerance: 0.05
+  why: "Not fitted."
+- id: payments.month_start_spike
+  kind: target
+  target: upi.month_start_spike
+  compare: absolute
+  tolerance: 0.10
+  why: "Stands for section 15.3's salary-day inflow spike. The five months May-September 2025 range from 1.26 to 1.36."
+
+# Balances and accounts -----------------------------------------------------------------------------------------------
+- id: balances.basic_mean
+  kind: target
+  target: inclusion.pmjdy.average_balance
+  compare: relative
+  tolerance: 0.25
+  why: "Fitted. PMJDY accounts are the model's basic accounts."
+- id: accounts.zero_balance
+  kind: target
+  target: inclusion.pmjdy.zero_balance_share
+  compare: absolute
+  tolerance: 0.03
+  why: "Counts are exact; the model's accounts are newer."
+- id: accounts.inoperative
+  kind: target
+  target: inclusion.pmjdy.operative_share
+  compare: absolute
+  tolerance: 0.05
+  why: "Compared with 1 - operative share. The real rule needs two years without a transaction; the window is months, so the simulated share is an upper bound on the two-year share."
+
+# Holdouts (checked after calibration, never fitted) ------------------------------------------------------------------
+- id: holdout.festival_uplift
+  kind: holdout
+  target: festival.diwali.upi_uplift
+  compare: absolute
+  tolerance: 0.015
+  why: "Half the measured uplift (1.031), so a model with no festival effect fails and one with the right effect passes."
+- id: holdout.dbt_cashout
+  kind: holdout
+  target: dbt.cashout_lag
+  compare: absolute
+  tolerance: 0.08
+  why: "One study of poor women in two Madhya Pradesh districts in 2018-19, the only measured lag found."

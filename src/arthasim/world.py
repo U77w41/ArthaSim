@@ -501,6 +501,14 @@ class Run:
         from arthasim.inspector import EntityTrace
         return EntityTrace(self, entity_id)
 
+    def validate(self, suite: str = "core", release_secret: str | None = None):
+        """Run a validation suite (`params/validation/<suite>.yaml`, or a path) against this run: hard checks, target
+        checks and holdouts. Returns a ValidationReport and writes it into the run as `validation_report`. A run made
+        with a release secret needs it again for the same-seed check, which is otherwise skipped."""
+        self._whole("validate")
+        from arthasim.validation import validate
+        return validate(self, suite, release_secret=release_secret)
+
     def metric(self, name_or_fn, **kwargs: Any) -> pl.DataFrame:
         """An outcome measure: a frame with one column per grouping and a `value` column."""
         from arthasim.metrics import run_metric
