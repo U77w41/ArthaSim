@@ -14,7 +14,22 @@ REAL_FORMATS = {
     "ifsc": re.compile(r"^[A-Z]{4}0[A-Z0-9]{6}$"),
     "aadhaar": re.compile(r"^[2-9][0-9]{11}$"),
     "mobile": re.compile(r"^[6-9][0-9]{9}$"),
+    "account_no": re.compile(r"^[0-9]{9,18}$"),         # Indian bank account numbers are 9 to 18 digits
+    "card": re.compile(r"^[0-9]{16}$"),                 # a real card number also passes the Luhn check
 }
+# Every synthetic VPA ends in a handle of this form; real handles name a bank or an app.
+SYNTHETIC_VPA_HANDLE = re.compile(r"^syn[0-9]{2}$")
+
+
+def luhn(digits: str) -> bool:
+    """True when a string of digits passes the Luhn check, as every real card number does."""
+    total = 0
+    for i, ch in enumerate(reversed(digits)):
+        d = int(ch)
+        if i % 2:
+            d = d * 2 - 9 if d > 4 else d * 2
+        total += d
+    return total % 10 == 0
 _A = ord("A")
 PAN_SLOTS = 26 * 10_000 * 10        # last letter x four digits x the digit in position 3
 _HALF, _ROUNDS = 11, 10             # Feistel network on 22 bits (2**22 >= PAN_SLOTS), ten rounds as in NIST FF1
