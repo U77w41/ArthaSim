@@ -622,9 +622,5 @@ The reference hashes of `main` were recorded before any code changed: 18 tables,
   - 0.58 s is the flush a save makes first, which rebuilds the accounts, instruments and bank-customer tables and writes the manifest.
   - 0.06 s is the pickle.
   - That is about 11% of a month's simulation.
-- **Two tests pass by design before their feature exists.** They assert that nothing changes:
-  - `test_expense_shock_at_rate_zero_changes_nothing`;
-  - `test_override_of_a_build_only_parameter_has_no_effect`, for its data files.
-
-  They guard the baseline's draws once the feature exists.
+- **One test passes by design before its feature exists.** `test_expense_shock_at_rate_zero_changes_nothing` asserts that nothing changes. It guards the baseline's draws once the shock exists.
 - **Fast suite time.** It went from 98 s to 174 s across the branch, mostly from the new tests. The 12 checkpoint tests alone take about 20 s.
