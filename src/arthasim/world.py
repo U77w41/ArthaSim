@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import pickle
 import shutil
 import time
 from pathlib import Path
@@ -141,6 +142,7 @@ class World:
         self._params_read: set[str] = set()     # registry ids read on a simulated day
         self._checkpoints = True                 # keep a checkpoint at every month end
         self._forked_from: dict[str, str] | None = None
+        self.checkpoint_seconds = 0.0            # time spent writing monthly checkpoints (not in wall_seconds)
 
     def __getstate__(self) -> dict[str, Any]:
         """What a checkpoint holds: everything but the store, the watchers, the release secret and the keys derived
@@ -212,6 +214,27 @@ class World:
             shutil.rmtree(folder, ignore_errors=True)
             raise
         return world
+
+    def fork(self, path_out: str | Path | None = None, checkpoints: bool | None = None) -> "World":
+        """A copy of this world, in memory, continuing in its own folder: `path_out`, or `<run>-fork-<label>`
+        numbered like `load`'s. Only at a month end. The two share their closed months by hard link and never
+        change each other's files. `checkpoints=None` keeps this world's setting."""
+        _checkpoint.require_month_end(self)
+        if path_out is not None:
+            folder = Path(path_out)
+            if folder.exists():
+                raise FileExistsError(f"run directory already exists: {folder}")
+        else:
+            folder = _checkpoint.next_free(Path(f"{self.path}-fork-{self.label}"))
+        self._flush()
+        clone: World = pickle.loads(pickle.dumps(self, protocol=5))
+        clone.config, clone.seed = self.config, self.seed
+        _checkpoint.link_tree(self.path, folder)
+        store = Store(folder)
+        store.restore({t: h.clone(store.spool_dir) for t, h in self._store._hash.items()})
+        clone._open(folder, store, self._checkpoints if checkpoints is None else checkpoints,
+                    {"run_id": self.path.name, "month": self.label, "how": "fork"})
+        return clone
 
     def _open(self, path: Path, store: Store, checkpoints: bool, forked_from: dict[str, str]) -> None:
         """Attach a loaded or forked world to its own folder, and rewrite the files its parent may since have
@@ -329,6 +352,10 @@ class World:
                 "balance_paise": book.balance.copy()}))
             self._store.end_month(month)
         self._wall += time.perf_counter() - started
+        if self._date.day == 1 and self._checkpoints:
+            started = time.perf_counter()
+            _checkpoint.write(self, self.path / "checkpoints" / self.label)
+            self.checkpoint_seconds += time.perf_counter() - started
         if self._watchers:                      # last, once the day is complete (callback time is not counted)
             self._notify(day, payments, frames)
 
@@ -398,6 +425,20 @@ class Run:
         """An outcome measure: a frame with one column per grouping and a `value` column."""
         from arthasim.metrics import run_metric
         return run_metric(self, name_or_fn, **kwargs)
+
+    def fork_at(self, date: Date, path_out: str | Path | None = None, release_secret: str | None = None,
+                checkpoints: bool = True) -> World:
+        """A new world from this run's own checkpoint at the month end before `date` (the 1st of a month)."""
+        date = _as_date(date)
+        if date.day != 1:
+            raise ValueError(f"fork_at needs the 1st of a month; got {date.isoformat()}")
+        label = f"{date - dt.timedelta(days=1):%Y-%m}"
+        folder = Path(self.path) / "checkpoints"
+        have = sorted(p.name for p in folder.iterdir()) if folder.exists() else []
+        if label not in have:
+            raise ValueError(f"no checkpoint for {date.isoformat()} (month end {label}); this run has "
+                             f"{', '.join(have) or 'none'}")
+        return World.load(folder / label, path_out=path_out, release_secret=release_secret, checkpoints=checkpoints)
 
     def export(self, dest: str | Path, view: str = "bank", asof: Date | None = None, **scope: Any) -> Path:
         """Write a view to Parquet under `dest`, with a manifest and a data dictionary. Observer views drop every
