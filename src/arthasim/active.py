@@ -16,6 +16,7 @@ import polars as pl
 
 from arthasim import macro, where
 from arthasim.build import categories as c
+from arthasim.dbt.schemes import OLD_AGE_PENSION, PM_KISAN, WOMEN, ScenarioScheme
 from arthasim.engine import rng
 from arthasim.interventions import (ChangeRailRule, DBTTransfer, ExpenseShock, IncomeShock, Intervention,
                                     MacroPath, ParamOverride, SetHook, SetPolicyRate)
@@ -115,7 +116,12 @@ class Active:
         return row.seq
 
     def _check_more(self, world: "World", iv: Intervention) -> None:
-        """Checks of later kinds (Tasks 7 and 8)."""
+        if isinstance(iv, DBTTransfer):
+            taken = {PM_KISAN, OLD_AGE_PENSION, WOMEN}
+            taken |= {s.name for s in getattr(_module(world, "dbt"), "schemes", [])}
+            taken |= {r.iv.scheme for r in self.rows if isinstance(r.iv, DBTTransfer)}
+            if iv.scheme in taken:
+                raise ValueError(f"scheme name {iv.scheme!r} is taken; names in use are {', '.join(sorted(taken))}")
 
     @staticmethod
     def _check_module(world: "World", impl: Any) -> None:
@@ -164,6 +170,49 @@ class Active:
         first = day.replace(day=1)
         if name == "lifecourse":
             self._income_shocks(world, first)
+        elif name == "budget":
+            self._expense_shocks(world, first)
+        elif name == "dbt":
+            self._dbt_affected(world, first)
+
+    def dbt_schemes(self, first: dt.date) -> list[ScenarioScheme]:
+        """Scenario DBT schemes enrolling in the month starting `first`, in the order applied."""
+        out = []
+        for row in self.rows:
+            if isinstance(row.iv, DBTTransfer):
+                sch = ScenarioScheme(row.iv.scheme, row.iv.amount_paise, row.iv.where, tuple(row.iv.dates), row.seq)
+                if sch.active(first):
+                    out.append(sch)
+        return out
+
+    def _dbt_affected(self, world: "World", first: dt.date) -> None:
+        results = getattr(_module(world, "dbt"), "_results", [])
+        for row in self.rows:
+            if isinstance(row.iv, DBTTransfer) and row.affected is None and row.effective == first:
+                for scheme, r in results:
+                    if isinstance(scheme, ScenarioScheme) and scheme.seq == row.seq:
+                        row.affected = int(r.enrolled.sum())
+                        row.extra = {"selected": int(r.payee.size)}
+
+    def _expense_shocks(self, world: "World", first: dt.date) -> None:
+        """Extra medical shocks, after the budget has drawn the month's own (so those stay paired)."""
+        s, params = world.state, world.params
+        beh, hh_of = s.behaviour, s.population.households.household_of_person
+        key = first.toordinal()
+        for row in self.rows:
+            iv = row.iv
+            if not isinstance(iv, ExpenseShock) or row.effective > first or (row.ends and first >= row.ends):
+                continue
+            hh = np.unique(hh_of[where.select(world, iv.where)]).astype(np.int64)
+            hit = rng.uniform(world.seed, rng.stream_id(iv.stream()), hh, key) < iv.rate
+            cost = rng.lognormal(world.seed, rng.stream_id(iv.stream() + ".cost"), hh, key,
+                                 params.get("shock.medical_median_paise"), params.get("shock.medical_sigma"))
+            h = hh[hit]
+            beh.medical_due[h] += np.maximum(100, np.rint(cost[hit])).astype(np.int64)
+            beh.stress[h] = np.minimum(1.0, beh.stress[h] + params.get("shock.stress_bonus"))
+            if row.effective == first:
+                row.affected = int(hh.size)
+                row.extra = {"selected": int(hh.size)}
 
     def target_shift(self, month: dt.date, n_cells: int) -> np.ndarray:
         """Per target cell, the people active layoff shocks hold off its salaried target this month."""
@@ -268,6 +317,13 @@ class Active:
 
     def details(self) -> list[dict[str, Any]]:
         return [{"kind": type(r.iv).__name__, **r.iv.details()} for r in self.rows]
+
+
+def _module(world: "World", name: str):
+    for m in world.modules:
+        if m.name == name:
+            return m
+    return None
 
 
 def unapplied(applied: list[Intervention], wanted: tuple[Intervention, ...]) -> list[Intervention]:

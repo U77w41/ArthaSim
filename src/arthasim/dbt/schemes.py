@@ -54,6 +54,29 @@ class Scheme:
     pays_on: Callable[[dt.date, ParamRegistry], bool]
 
 
+@dataclass(frozen=True)
+class ScenarioScheme:
+    """A scenario's transfer (`DBTTransfer`): everyone `where` selects is enrolled, each month from the earliest
+    date's month to the latest's, and credited `amount_paise` on each date."""
+    name: str
+    amount_paise: int
+    where: str
+    dates: tuple[dt.date, ...]
+    seq: int
+    purpose: int = int(Purpose.DBT_OTHER)
+
+    def active(self, first: dt.date) -> bool:
+        lo, hi = self.dates[0], self.dates[-1]
+        return (lo.year, lo.month) <= (first.year, first.month) <= (hi.year, hi.month)
+
+    def pays_on(self, day: dt.date, params: ParamRegistry) -> bool:
+        return day in self.dates
+
+    def per_month(self, first: dt.date) -> int:
+        """Paise paid in the month: its transfer income for that month, and nothing in other months."""
+        return self.amount_paise * sum(1 for d in self.dates if (d.year, d.month) == (first.year, first.month))
+
+
 def bpl_households(per_member_income: np.ndarray, members: np.ndarray, is_metro: np.ndarray,
                    headcount: Mapping[str, float]) -> np.ndarray:
     """Per household: on the BPL list. Within each district kind, households are ranked by earned income

@@ -7,6 +7,7 @@ import datetime as dt
 import numpy as np
 import polars as pl
 
+from arthasim import where
 from arthasim.build.banking import pick_banks
 from arthasim.build.pipeline import dbt_inputs
 from arthasim.dbt.schemes import Scheme, SchemeResult, default_schemes
@@ -39,6 +40,12 @@ class GovernmentTransfers(BehaviourModule):
             return
         first = month.replace(day=1)
         results = [(scheme, scheme.evaluate(dbt_inputs(s), params, seed)) for scheme in self.schemes]
+        for sch in world.active.dbt_schemes(first):
+            payee = where.select(world, sch.where)
+            k = payee.size
+            results.append((sch, SchemeResult(sch.name, payee, np.ones(k, dtype=bool),
+                                              np.full(k, sch.amount_paise, dtype=np.int64),
+                                              np.full(k, sch.per_month(first), dtype=np.int64))))
 
         # Every payee is paid into a bank account: an enrolled payee without one opens it this month.
         n = len(s.person_ids)

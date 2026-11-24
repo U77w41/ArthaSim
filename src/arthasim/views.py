@@ -218,7 +218,7 @@ MCC = {"grocery": 5411, "food": 5812, "fuel": 5541, "pharmacy": 5912, "apparel":
        "amc": 6211}
 # Purposes a payer's remark names in the narration, by rail. The only use of `purpose` outside the truth layer.
 REMARKS: dict[str, set[str]] = {"NACH_CR": {"SALARY", "PENSION"},
-                                 "APBS": {"DBT_PM_KISAN", "DBT_OLD_AGE_PENSION", "DBT_WOMEN"}}
+                                 "APBS": {"DBT_PM_KISAN", "DBT_OLD_AGE_PENSION", "DBT_WOMEN", "DBT_OTHER"}}
 # Government transfers reach beneficiaries through PFMS, the Public Financial Management System, over APBS.
 GOVERNMENT_HANDLE = "PFMS"
 _NARRATION_RAIL = {"UPI_P2M": "UPI", "UPI_P2P": "UPI", "NACH_CR": "NACH", "DEBIT_CARD": "POS"}

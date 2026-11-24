@@ -53,6 +53,7 @@ class Purpose(IntEnum):
     UTILITIES = 19
     TELECOM = 20
     MEDICAL = 21
+    DBT_OTHER = 22          # a scenario's DBT scheme (plan 1d-2)
     CASH_WITHDRAWAL = 30
     CASH_DEPOSIT = 31
 
