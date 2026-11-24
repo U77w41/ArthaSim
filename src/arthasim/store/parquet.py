@@ -18,6 +18,8 @@ DIM_TABLES = ["persons", "households", "orgs", "banks", "accounts", "instruments
               "truth_person_latent", "bank_customers"]
 # Run metadata: one file each, rewritten at every flush.
 META_TABLES = ["macro_paths", "interventions_log"]
+# Written about a run after it ran (run.validate); one file each, outside the run's content hashes.
+REPORT_TABLES = ["validation_report"]
 LOG_SCHEMA = {"seq": pl.Int64, "kind": pl.String, "effective": pl.Date, "ends": pl.Date, "details": pl.String,
               "affected": pl.Int64, "read_after": pl.Boolean}
 ROW_GROUP_ROWS = 1_000_000
@@ -142,7 +144,7 @@ def table_files(path: Path, name: str, months: tuple[str, str] | None = None) ->
     """Files of a table, facts in month then part order. `months` ("YYYY-MM", "YYYY-MM", inclusive) keeps only the
     fact months in that range; other tables are whole."""
     path = Path(path)
-    if name in DIM_TABLES or name in META_TABLES:
+    if name in DIM_TABLES or name in META_TABLES or name in REPORT_TABLES:
         f = path / f"{name}.parquet"
         return [f] if f.exists() else []
     files = fact_files(path, name)

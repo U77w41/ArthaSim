@@ -37,8 +37,8 @@ from arthasim import checkpoint as _checkpoint
 from arthasim.active import Active
 from arthasim import macro as _macro
 from arthasim.store.hashing import RunningHash
-from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, META_TABLES, Store, content_hash, read_table,
-                                    table_files, write_atomic)
+from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, META_TABLES, REPORT_TABLES, Store, content_hash,
+                                    read_table, table_files, write_atomic)
 
 Date = str | dt.date
 _CODE_VERSION = "0.0.1"
@@ -449,6 +449,8 @@ class World:
             "params_read": sorted(self._params_read),
             "forked_from": self._forked_from, "checkpoints": self._checkpoints,
             "scenario": self.active.details(),
+            # The config as built, overrides included and the release secret left out, so a run can be rebuilt.
+            "config": self.config.model_dump(mode="json", exclude={"release_secret"}),
         }
         manifest["builder"] = self.config.builder
         if self.state.population is not None:
@@ -476,7 +478,8 @@ class Run:
         return cls(path, json.loads((Path(path) / "run_manifest.json").read_text()))
 
     def tables(self) -> list[str]:
-        return [t for t in FACT_TABLES + DIM_TABLES + META_TABLES if table_files(Path(self.path), t, self.months)]
+        return [t for t in FACT_TABLES + DIM_TABLES + META_TABLES + REPORT_TABLES
+                if table_files(Path(self.path), t, self.months)]
 
     def table(self, name: str) -> pl.LazyFrame:
         return read_table(Path(self.path), name, self.months)
