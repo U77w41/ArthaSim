@@ -275,7 +275,9 @@ What may be a gap, and what may not:
   - `labour.ur.educated` and `labour.ur.graduate_15_29`: life stages carry no education gradient beyond the build's priors.
   - `payments.upi_p2p_per_adult`: the model's P2P flows are allowances, remittances and some earnings, not the informal transfers that make up most real P2P.
   - `holdout.festival_uplift`: the model has no festival behaviour.
-  The gate's first run is compared with this list in the results.
+  - `payments.debit_card_ticket`: the rail choice (`modules/spending.py`, `choose_rail`) does not depend on the amount, so cards carry ordinary tickets (₹316 on the uncalibrated bench run, against about ₹3,300).
+  - `payments.p2p_under_500`: the same P2P flows are mostly allowances and earnings, which are large (7% under ₹500 on the bench run, against 59%).
+  The gate's first run is compared with this list in the results. The list comes from the code and from the uncalibrated bench run, before any calibrated run.
 - **The gate must end green.** A red gate is not an end state. The phase 1 exit criterion ("acceptance checks pass at tier S") is met only for the checks that pass; the results doc states plainly that each listed gap leaves it unmet.
 
 **Decided.** A gate that ignored failures would hide them; a gate that required them to pass would require new behaviour this plan does not build. Listing them in the suite, where the report shows them, keeps the failure visible and the gate honest. Cost if wrong: none to the record; the list must be updated when a gap closes, which the gate enforces.
