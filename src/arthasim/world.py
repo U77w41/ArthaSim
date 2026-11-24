@@ -432,19 +432,26 @@ class World:
 
 
 class Run:
-    def __init__(self, path: str | Path, manifest: dict[str, Any]) -> None:
+    def __init__(self, path: str | Path, manifest: dict[str, Any], months: tuple[str, str] | None = None) -> None:
         self.path = str(path)
         self.manifest = manifest
+        self.months = months           # ("YYYY-MM", "YYYY-MM") for a window: fact tables see only those months
+
+    def window(self, start: Date, end: Date) -> "Run":
+        """This run seen through the months from `start` to `end`: `tables`, `table` and `sql` (so every metric)
+        read only those months of the fact tables; dimension tables are whole."""
+        start, end = _as_date(start), _as_date(end)
+        return Run(self.path, self.manifest, (f"{start:%Y-%m}", f"{end:%Y-%m}"))
 
     @classmethod
     def open(cls, path: str | Path) -> "Run":
         return cls(path, json.loads((Path(path) / "run_manifest.json").read_text()))
 
     def tables(self) -> list[str]:
-        return [t for t in FACT_TABLES + DIM_TABLES + META_TABLES if table_files(Path(self.path), t)]
+        return [t for t in FACT_TABLES + DIM_TABLES + META_TABLES if table_files(Path(self.path), t, self.months)]
 
     def table(self, name: str) -> pl.LazyFrame:
-        return read_table(Path(self.path), name)
+        return read_table(Path(self.path), name, self.months)
 
     def view(self, kind: str, asof: Date | None = None, **scope: Any):
         """What one observer (bank, switch, bureau or truth) sees of this run."""
@@ -484,6 +491,6 @@ class Run:
     def sql(self, query: str) -> pl.DataFrame:
         con = duckdb.connect()
         for t in self.tables():
-            files = [str(f) for f in table_files(Path(self.path), t)]
+            files = [str(f) for f in table_files(Path(self.path), t, self.months)]
             con.execute(f"create view {t} as select * from read_parquet({files!r}, hive_partitioning=false)")
         return con.sql(query).pl()

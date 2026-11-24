@@ -108,17 +108,22 @@ class Store:
         os.replace(temporary, final)
 
 
-def table_files(path: Path, name: str) -> list[Path]:
-    """Files of a table, facts in month then part order."""
+def table_files(path: Path, name: str, months: tuple[str, str] | None = None) -> list[Path]:
+    """Files of a table, facts in month then part order. `months` ("YYYY-MM", "YYYY-MM", inclusive) keeps only the
+    fact months in that range; other tables are whole."""
     path = Path(path)
     if name in DIM_TABLES or name in META_TABLES:
         f = path / f"{name}.parquet"
         return [f] if f.exists() else []
-    return fact_files(path, name)
+    files = fact_files(path, name)
+    if months is not None:
+        lo, hi = months
+        files = [f for f in files if lo <= f.parent.name.split("=", 1)[1] <= hi]
+    return files
 
 
-def read_table(path: Path, name: str) -> pl.LazyFrame:
-    files = table_files(path, name)
+def read_table(path: Path, name: str, months: tuple[str, str] | None = None) -> pl.LazyFrame:
+    files = table_files(path, name, months)
     if not files:
         raise FileNotFoundError(f"no table {name!r} in {path}")
     return pl.concat([pl.scan_parquet(f, hive_partitioning=False) for f in files])
