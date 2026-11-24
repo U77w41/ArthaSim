@@ -80,6 +80,22 @@ def resolve_params(params: Sequence[str | Free] | None, registry: ParamRegistry 
     return out
 
 
+def narrow(frees: Sequence[Free], values: Mapping[str, float], width: float) -> list[Free]:
+    """Bounds narrowed around fitted values, for a refining second calibration: a log parameter keeps
+    [v / (1 + 2 width), v * (1 + 2 width)], a linear one v plus or minus `width` of its range; both clipped to the
+    original bounds."""
+    out = []
+    for f in frees:
+        v = float(values[f.name])
+        if f.log:
+            lo, hi = v / (1 + 2 * width), v * (1 + 2 * width)
+        else:
+            span = (f.high - f.low) * width
+            lo, hi = v - span, v + span
+        out.append(Free(f.id, max(f.low, lo), min(f.high, hi), f.log, f.key, f.scale))
+    return out
+
+
 def _scaled(value: Any, factor: float) -> Any:
     if isinstance(value, bool):
         return value
@@ -224,10 +240,12 @@ class CalibrationResult:
 def calibrate(config: Config, params: Sequence[str | Free] | None = None, targets: Sequence[str] | None = None,
               trials: int = 200, seeds: Sequence[int] = (1, 2, 3), months: int = 8, workers: int = 1,
               sampler_seed: int = 0, path: str | Path | None = None,
-              progress: Callable[[int, float, float], None] | None = None) -> CalibrationResult:
+              progress: Callable[[int, float, float], None] | None = None,
+              start: Mapping[str, float] | None = None) -> CalibrationResult:
     """Fit free parameters by simulation. Each trial runs `months` months from `config.start` for every seed and
     scores the window's statistics against the target checks (core-suite ids). `progress(trial, loss, best)` is
-    called after each trial."""
+    called after each trial. `start` (free-parameter name to value) is the first trial's proposal, as when a
+    refining calibration starts from an earlier fit."""
     import optuna
     from optuna.distributions import FloatDistribution
     from arthasim.world import _registry_path
@@ -256,6 +274,8 @@ def calibrate(config: Config, params: Sequence[str | Free] | None = None, target
     study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(
         seed=sampler_seed, multivariate=True, n_startup_trials=min(20, trials)))
     dists = {f.name: FloatDistribution(f.low, f.high, log=f.log) for f in frees}
+    if start is not None:
+        study.enqueue_trial({f.name: min(max(float(start[f.name]), f.low), f.high) for f in frees})
     n_workers = max(1, min(int(workers), len(seeds)))
     pool = ProcessPoolExecutor(max_workers=n_workers, mp_context=multiprocessing.get_context("spawn")) \
         if n_workers > 1 else None

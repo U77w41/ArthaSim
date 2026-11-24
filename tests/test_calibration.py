@@ -65,3 +65,14 @@ def test_save_load_apply_and_report(tmp_path):
     result.report(tmp_path / "fit.md")
     text = (tmp_path / "fit.md").read_text()
     assert "earn.base_paise" in text and "pay.regular_monthly" in text
+
+
+def test_narrowed_space_and_start_values(tmp_path):
+    frees = [Free("earn.base_paise", 300_000, 1_500_000, log=True), Free("earn.sigma", 0.2, 0.9)]
+    narrow = calibration.narrow(frees, {"earn.base_paise": 600_000.0, "earn.sigma": 0.85}, width=0.25)
+    assert narrow[0].low == pytest.approx(600_000 / 1.5) and narrow[0].high == pytest.approx(600_000 * 1.5)
+    assert narrow[1].low == pytest.approx(0.85 - 0.175) and narrow[1].high == 0.9          # clipped at the bound
+    config = Config.tier("S", persons=1_000, out_dir=str(tmp_path))
+    result = calibration.calibrate(config, params=[narrow[0]], targets=["pay.regular_monthly"], trials=1,
+                                   seeds=(1,), months=2, start={"earn.base_paise": 600_000.0})
+    assert result.trials["free:earn.base_paise"].to_list() == [600_000.0]

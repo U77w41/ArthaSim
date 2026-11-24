@@ -11,7 +11,8 @@ import sys
 import time
 from pathlib import Path
 
-from arthasim import Config, calibrate
+from arthasim import CalibrationResult, Config, Free, calibrate
+from arthasim.calibration import narrow
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -24,17 +25,25 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--sampler-seed", type=int, default=0)
     ap.add_argument("--work", default="runs/calibration", help="folder for the trial runs (each removed when scored)")
     ap.add_argument("--out", default="params/calibration/fitted.yaml")
+    ap.add_argument("--around", help="refine: search narrowed bounds around this earlier fit, starting from it")
+    ap.add_argument("--width", type=float, default=0.25, help="with --around: the narrowing (see calibration.narrow)")
     args = ap.parse_args(argv)
 
     config = Config.tier("S", persons=args.persons, out_dir=args.work)
+    params, start = None, None
+    if args.around:
+        earlier = CalibrationResult.load(args.around)
+        params = narrow([Free(**f) for f in earlier.space], earlier.free, args.width)
+        start = earlier.free
     started = time.perf_counter()
 
     def progress(trial: int, loss: float, best: float) -> None:
         print(f"trial {trial + 1}/{args.trials}  loss {loss:.4g}  best {best:.4g}  "
               f"{time.perf_counter() - started:.0f}s", flush=True)
 
-    result = calibrate(config, trials=args.trials, seeds=tuple(int(s) for s in args.seeds.split(",")),
-                       months=args.months, workers=args.workers, sampler_seed=args.sampler_seed, progress=progress)
+    result = calibrate(config, params=params, trials=args.trials, seeds=tuple(int(s) for s in args.seeds.split(",")),
+                       months=args.months, workers=args.workers, sampler_seed=args.sampler_seed, progress=progress,
+                       start=start)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     result.save(out)
