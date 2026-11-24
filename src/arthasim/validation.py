@@ -192,7 +192,8 @@ def validate(run: "Run", suite: str | Path = "core", release_secret: str | None 
         raise ValueError(f"validation reads whole runs; this Run is a window ({run.months[0]} to {run.months[1]})")
     params = statistics.run_params(run) if "config" in run.manifest else None
     name = suite_path(suite).stem
-    ctx = statistics.context(run) if params is not None else None
+    population = run.manifest.get("builder") == "population"
+    ctx = statistics.context(run) if params is not None and population else None
     window = f"{ctx.months[0]} to {ctx.months[1]}" if ctx is not None else None
     rows: list[dict[str, Any]] = []
     for check in load_suite(suite, params):
@@ -206,8 +207,9 @@ def validate(run: "Run", suite: str | Path = "core", release_secret: str | None 
         if check.target is not None and params is not None:
             row = params.table().filter(pl.col("id") == check.target)
             base["target_status"] = row["status"][0]
-        if ctx is None:
-            reason = ("no complete month after the first" if params is not None
+        if ctx is None or not population:
+            reason = ("the run has no population (spike builder): the statistics need persons, households and "
+                      "districts" if not population else "no complete month after the first" if params is not None
                       else "the run was made before plan 1e and has no recorded config")
             rows.append({**base, "component": "all", "simulated": None, "target": None, "lower": None,
                          "upper": None, "status": "skipped", "window": None, "detail": reason})

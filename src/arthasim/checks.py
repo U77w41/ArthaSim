@@ -47,6 +47,10 @@ def ledger(run: "Run") -> list[dict[str, Any]]:
     cash held, the same at every month end as at opening."""
     path = Path(run.path)
     acc = pl.read_parquet(path / "accounts.parquet")
+    names = ("shapes", "stock_flow", "non_negative", "bank_balance_sheets", "cash_conservation", "flow_matrix")
+    if "opening_balance_paise" not in acc.columns:
+        return [_row(n, None, "the run's accounts table has no opening balances (a spike-builder run), so the "
+                              "invariants cannot be re-derived; the run checked them every simulated day") for n in names]
     book = SimpleNamespace(type=np.array([int(_TYPES[t]) for t in acc["type"].to_list()], dtype=np.int64),
                            holder=acc["holder_entity_id"].to_numpy(), issuer=acc["issuer_entity_id"].to_numpy())
     opening = acc["opening_balance_paise"].to_numpy()
@@ -165,8 +169,11 @@ def determinism(run: "Run", release_secret: str | None = None) -> list[dict[str,
         rerun = World.build(config, seed=int(m["seed"]), path=folder / "rerun", checkpoints=False).run(until)
         month = f"{start:%Y-%m}"
         facts = [t for t in FACT_TABLES if _month_hash(Path(run.path), t, month) != _month_hash(Path(rerun.path), t, month)]
-        dims = [t for t in DIM_TABLES if t not in ACCOUNT_TABLES
-                and content_hash(Path(run.path), t, fact=False) != content_hash(Path(rerun.path), t, fact=False)]
+        def dim_hash(p: Path, t: str) -> str | None:
+            return content_hash(p, t, fact=False) if (p / f"{t}.parquet").exists() else None
+        compared = [t for t in DIM_TABLES if t not in ACCOUNT_TABLES
+                    and ((Path(run.path) / f"{t}.parquet").exists() or (Path(rerun.path) / f"{t}.parquet").exists())]
+        dims = [t for t in compared if dim_hash(Path(run.path), t) != dim_hash(Path(rerun.path), t)]
     finally:
         shutil.rmtree(folder, ignore_errors=True)
     days = (until - start).days + 1
@@ -174,8 +181,8 @@ def determinism(run: "Run", release_secret: str | None = None) -> list[dict[str,
         _row("first_month_facts", not facts, f"differ: {', '.join(facts)}" if facts else
              f"all {len(FACT_TABLES)} fact tables equal over {start} to {until} ({days} days) after a rebuild"),
         _row("build_dimensions", not dims, f"differ: {', '.join(dims)}" if dims else
-             f"{len(DIM_TABLES) - len(ACCOUNT_TABLES)} dimension tables equal (the account tables change as accounts "
-             "open, so they are left out)"),
+             f"{len(compared)} dimension tables equal (the account tables change as accounts open, so they are "
+             "left out)"),
     ]
 
 

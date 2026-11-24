@@ -132,3 +132,13 @@ def test_a_run_with_one_month_skips_targets(tmp_path):
 def test_a_window_cannot_be_validated():
     with pytest.raises(ValueError, match="window"):
         three_months().window("2025-05-01", "2025-05-31").validate()
+
+
+def test_a_spike_run_skips_what_it_cannot_check(tmp_path):
+    config = Config.tier("XS", persons=400, employers=4, merchants=12, out_dir=str(tmp_path))
+    table = World.build(config, seed=6, checkpoints=False).run("2025-05-31").validate().table()
+    ledger = table.filter(pl.col("check") == "ledger")
+    assert set(ledger["status"]) == {"skipped"} and "opening balances" in ledger["detail"][0]
+    assert set(table.filter(pl.col("check") == "determinism")["status"]) == {"pass"}
+    targets = table.filter(pl.col("kind") != "hard")
+    assert set(targets["status"]) == {"skipped"} and "population" in targets["detail"][0]
