@@ -7,7 +7,10 @@ import polars as pl
 import pytest
 
 from arthasim import Config, Experiment, ExperimentResult, Scenario, World
-from arthasim.interventions import DBTTransfer, ParamOverride
+from arthasim.engine.intents import Intents
+from arthasim.interventions import DBTTransfer, ParamOverride, SetHook
+from arthasim.modules.spending import Consumption
+from arthasim.modules.spike import SpikeConsumption
 from helpers import P, run_files
 
 FARMERS = "life_stage == 'farm' and not helper"
@@ -137,3 +140,61 @@ def test_existing_folder(tmp_path):
     (tmp_path / "e").mkdir()
     with pytest.raises(FileExistsError):
         Experiment(config(tmp_path), BASE, {"dbt": DBT}, [1], "2025-05-01", "2025-05-03", path=tmp_path / "e").run()
+
+
+# -- Final review fixes -----------------------------------------------------------------------------------------------
+
+class StopsAfter(SpikeConsumption):
+    """Spike spending that stops after 20 days of its own: state that must not carry from one seed to the next."""
+
+    def __init__(self) -> None:
+        self.days = 0
+
+    def intents(self, world, day):
+        self.days += 1
+        return super().intents(world, day) if self.days <= 20 else Intents.empty()
+
+
+class Boom(SpikeConsumption):
+    def intents(self, world, day):
+        raise RuntimeError("boom")
+
+
+def xs(out):
+    return Config.tier("XS", persons=500, employers=10, merchants=30, out_dir=str(out))
+
+
+def test_a_stateful_module_does_not_carry_between_seeds(tmp_path):
+    impl = StopsAfter()
+    arm = BASE.add(SetHook("module", impl, date="2025-05-01"))
+    runs = {w: Experiment(xs(tmp_path), BASE, {"swap": arm}, [1, 2], "2025-05-01", "2025-05-31",
+                          path=tmp_path / f"w{w}").run(workers=w) for w in (1, 2)}
+    assert impl.days == 0                                           # the caller's module is never run
+    one, two = runs[1], runs[2]
+    assert one.effect("txn_volume", fill=0).equals(two.effect("txn_volume", fill=0))
+    assert ([r.manifest["content_hash"] for r in one.runs("swap")]
+            == [r.manifest["content_hash"] for r in two.runs("swap")])
+
+
+def test_apply_checks_run_at_construction(tmp_path):
+    with pytest.raises(KeyError):
+        Experiment(config(tmp_path), BASE, {"x": BASE.add(ParamOverride("no.such", 1, "2025-05-01"))}, [1],
+                   "2025-05-01", "2025-05-03")
+    bad = [(xs(tmp_path), BASE.add(DBTTransfer("X", 1, "true", ["2025-05-05"]))),
+           (config(tmp_path), BASE.add(DBTTransfer("PM_KISAN", 1, "true", ["2025-05-05"]))),
+           (config(tmp_path), BASE.add(DBTTransfer("X", 1, "true", ["2025-05-05"]),
+                                       DBTTransfer("X", 2, "true", ["2025-05-06"]))),
+           (xs(tmp_path), BASE.add(SetHook("module", Consumption(), date="2025-05-01")))]
+    for cfg, arm in bad:
+        with pytest.raises(ValueError):
+            Experiment(cfg, BASE, {"x": arm}, [1], "2025-05-01", "2025-05-03")
+
+
+def test_a_failed_run_leaves_no_folder(tmp_path):
+    exp = Experiment(xs(tmp_path), BASE, {"x": BASE.add(SetHook("module", Boom(), date="2025-05-01"))}, [1],
+                     "2025-05-01", "2025-05-03", path=tmp_path / "e")
+    with pytest.raises(RuntimeError, match="boom"):
+        exp.run()
+    assert not (tmp_path / "e").exists()
+    with pytest.raises(RuntimeError, match="boom"):                   # the same error again, not FileExistsError
+        exp.run()

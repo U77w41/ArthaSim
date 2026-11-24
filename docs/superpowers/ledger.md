@@ -617,10 +617,56 @@ The reference hashes of `main` were recorded before any code changed: 18 tables,
 
 ## Findings
 
-- **Watchers miss life-course events on the 1st of a month.** This is pre-existing and out of scope. `World._day` keeps one frame per table name for watchers, so the `dbt` module's `life_events` frame replaces the life course's. A watched person who retired on 1 May 2025 got no event in the callback (a probe at 2,000 persons from 28 April). Intervention events are likewise not passed to watchers. It is left for a follow-up.
+- **Watchers missed life-course events on the 1st of a month.** This was on `main`. `World._day` kept one frame per table name for watchers, so the `dbt` module's `life_events` frame replaced the life course's. A watched person who retired on 1 May 2025 got no event in the callback (a probe at 2,000 persons from 28 April). Intervention events were not passed to watchers either. The final review's fix pass fixed both (see below).
 - **A checkpoint save costs about 0.73 s at tier S, against the spec's estimate of under 0.2 s.**
   - 0.58 s is the flush a save makes first, which rebuilds the accounts, instruments and bank-customer tables and writes the manifest.
   - 0.06 s is the pickle.
   - That is about 11% of a month's simulation.
 - **One test passes by design before its feature exists.** `test_expense_shock_at_rate_zero_changes_nothing` asserts that nothing changes. It guards the baseline's draws once the shock exists.
 - **Fast suite time.** It went from 98 s to 174 s across the branch, mostly from the new tests. The 12 checkpoint tests alone take about 20 s.
+
+## Final review
+
+A fresh Opus reviewer read `21eecc9..f911afe` in two passes. It ran the new test files (63 passed), re-queried the results doc from the saved runs, and checked behaviours with probe scripts in the scratchpad. Verdict: "with fixes". It found two critical issues, two important ones and nine minor ones.
+
+**Fixed.** Each code fix has a test that failed first, then passed.
+- **The results doc's consumption baseline was ten times too large.** It read ₹3,611.46 crore; 361,145,627,221.8 paise is ₹361.15 crore. The row's own +0.46% fits only the correct figure. Corrected, and recomputed from the saved JSON.
+- **A module swap shared the caller's module object, so experiment results depended on the worker count.** With one worker, every seed's world ran the same object, and its state carried from seed to seed. The reviewer reproduced it: a module that stops after 40 days gave 580 payments instead of 19,131 in seed 2. The world now runs its own pickled copy from `apply`.
+  - `test_a_stateful_module_does_not_carry_between_seeds` failed first: the caller's module had run 62 days.
+  - `test_module_swap_from_its_month_start` now checks the world's copy.
+- **A scenario with a module swap was applied twice after a fork or a load.** Swaps matched by object identity, and fork and load copy the module. Swaps now match by their module's pickled state at `apply`. `test_a_scenario_with_a_module_swap_matches_after_fork_and_load` failed first, with two `SetHook` rows.
+- **`Experiment` ran `apply`'s checks only inside each seed, after the prefix, and a failed run left its folder.** Construction now checks:
+  - registry ids;
+  - population-only kinds on a spike config;
+  - DBT scheme names, built-in and repeated;
+  - module names.
+
+  A failed run removes its folder. Tests: `test_apply_checks_run_at_construction` and `test_a_failed_run_leaves_no_folder`, both failed first.
+- **Re-graded from minor: a save, fork or load folder inside the folder it links from.** Linking walked into its own copy, so `world.save(world.path / "ck")` would recurse until it failed. Such folders are now refused, except under the run's `checkpoints/`. `test_destinations_inside_the_run_folder_are_refused` failed first.
+- **Re-graded from minor: watchers never saw intervention events.** This closes the finding above. Watchers now get every module's rows of a table. `test_watchers_see_life_course_and_shock_events` failed first, with no `RETIRED` event.
+- **Re-graded from minor: `view`, `inspect` and `export` on a windowed `Run` silently read the whole run.** So a user metric reading through a view measured whole runs under `window="arms"`. They now raise. `test_a_window_refuses_views_inspection_and_export` failed first.
+- **The results doc had no per-file hash table,** which the spec asks for. It now has an appendix with the SHA-256 of all 108 files.
+
+Suite after the fixes: 441 passed, every fast test and all eight slow gates, in 581 s.
+
+**Rulings on the reviewer's "declined to judge" list:**
+- **A `MacroPath` after a `SetPolicyRate` replaces the shifted path from its own dates on,** as the spec says. Stands; cost: none in phase 1.
+- **`_CODE_VERSION` is unchanged.** Checkpoints are new on this branch, so none older exist. Stands; cost: a later change to pickled classes must bump it.
+- **DuckDB `where` could call file functions.** The expression is the user's own code. Stands; cost: none unless `where` strings come from untrusted sources.
+- **Disk growth with the copy fallback** is what the spec prescribes. Stands.
+- **A 0.73 s checkpoint** is the owner's call. It is recorded in the results and the findings.
+- **The watcher miss on `main`** is now fixed (above).
+- **The profile split was not re-measured by the reviewer.** It was measured in this session, at tier S at the end of April. Stands.
+- **A `SetPolicyRate` dated before the series' first step raises at its date, not at `apply`.** This needs a start before 7 February 2025. Deferred as minor.
+
+**Deferred minors:**
+- A pay cut is restored after a helper round trip, which is rare. A flip resets pay, and the restore should check for it.
+- `link_tree` falls back to a copy on any `OSError`. That is unreachable without a race.
+- `world.set_hook` on a fresh world that starts mid-month raises; `SetHook(date=None)` works.
+- Report gaps:
+  - no line for an intervention dated after `end`;
+  - the `ChangeRailRule` line says "the parameter" rather than its id;
+  - "selected nobody" is printed for a layoff whose selected people were not salaried.
+- The default experiment digest covers only a module's class name, so experiments differing only in a module's settings collide with `FileExistsError`.
+- Scenario DBT credits reuse the `dbt.slot` and `dbt.offset` streams, so a person paid by two schemes on one day gets equal timestamps.
+- A `SetPolicyRate` dated before the series' first step (above).

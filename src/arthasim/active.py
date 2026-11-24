@@ -5,6 +5,7 @@ month start; income shocks act after the life course's monthly hook and expense 
 (`after_module`); scenario DBT schemes run inside the `dbt` module; `end_of_day` notes which parameters were read."""
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import json
 import pickle
@@ -44,12 +45,34 @@ def target_param(iv: Intervention) -> str:
     return macro.param_id("policy_rate")
 
 
+def check_module(impl: Any, names: list[str]) -> bytes:
+    """A module swapped in must be a BehaviourModule named like an existing module, and must pickle. Returns its
+    pickled bytes."""
+    if not isinstance(impl, BehaviourModule):
+        raise TypeError(f"a module swap needs a BehaviourModule; got {type(impl).__name__}")
+    if impl.name not in names:
+        raise ValueError(f"no module named {impl.name!r} to replace; modules are {', '.join(names)}")
+    try:
+        return pickle.dumps(impl, protocol=5)
+    except Exception as e:                      # noqa: BLE001 - any failure to pickle
+        raise ValueError(f"a module swapped in must pickle (for checkpoints and workers): {e}") from None
+
+
+def match_key(iv: Intervention) -> Any:
+    """What makes two interventions the same one. A module swap compares by its module's pickled state, not by
+    object identity, so it still matches after a fork or a load (which copy the module)."""
+    if isinstance(iv, SetHook):
+        return ("SetHook", iv.kind, iv.bank, iv.date, pickle.dumps(iv.impl, protocol=5))
+    return iv
+
+
 @dataclass
 class _Row:
     seq: int
     iv: Intervention
     effective: dt.date
     ends: dt.date | None
+    key: Any = None
     extra: dict[str, Any] = field(default_factory=dict)
     affected: int | None = None
     read_after: bool | None = None
@@ -107,10 +130,14 @@ class Active:
                 raise ValueError(f"{type(iv).__name__} needs a population world (tier S and above); "
                                  "this is a spike world")
             where.check(iv.where)
+        key = match_key(iv) if not isinstance(iv, SetHook) else None
         if isinstance(iv, SetHook):
-            self._check_module(world, iv.impl)
+            # The world runs its own copy, so no state passes between worlds (or seeds) through the caller's object.
+            blob = check_module(iv.impl, [m.name for m in world.modules])
+            key = ("SetHook", iv.kind, iv.bank, iv.date, blob)
+            iv = dataclasses.replace(iv, impl=pickle.loads(blob))
         self._check_more(world, iv)
-        row = _Row(len(self.rows), iv, effective, iv.ends(),
+        row = _Row(len(self.rows), iv, effective, iv.ends(), key=key,
                    read_after=False if isinstance(iv, PARAM_KINDS) else None)
         self.rows.append(row)
         return row.seq
@@ -123,17 +150,9 @@ class Active:
             if iv.scheme in taken:
                 raise ValueError(f"scheme name {iv.scheme!r} is taken; names in use are {', '.join(sorted(taken))}")
 
-    @staticmethod
-    def _check_module(world: "World", impl: Any) -> None:
-        if not isinstance(impl, BehaviourModule):
-            raise TypeError(f"a module swap needs a BehaviourModule; got {type(impl).__name__}")
-        names = [m.name for m in world.modules]
-        if impl.name not in names:
-            raise ValueError(f"no module named {impl.name!r} to replace; modules are {', '.join(names)}")
-        try:
-            pickle.dumps(impl)
-        except Exception as e:                      # noqa: BLE001 - any failure to pickle
-            raise ValueError(f"a module swapped in must pickle (for checkpoints and workers): {e}") from None
+    def unapplied(self, wanted: tuple[Intervention, ...]) -> list[Intervention]:
+        """The interventions of `wanted` not matched one for one, in order, by one already applied."""
+        return unapplied([r.key for r in self.rows], wanted)
 
     # -- the day ------------------------------------------------------------------------------------------------
     def start_of_day(self, world: "World", day: dt.date) -> None:
@@ -326,13 +345,14 @@ def _module(world: "World", name: str):
     return None
 
 
-def unapplied(applied: list[Intervention], wanted: tuple[Intervention, ...]) -> list[Intervention]:
-    """The interventions of `wanted` not matched one for one, in order, by an equal one already applied."""
-    used = [False] * len(applied)
+def unapplied(applied_keys: list[Any], wanted: tuple[Intervention, ...]) -> list[Intervention]:
+    """The interventions of `wanted` not matched one for one, in order, by one already applied (by `match_key`)."""
+    used = [False] * len(applied_keys)
     out = []
     for iv in wanted:
-        for i, done in enumerate(applied):
-            if not used[i] and done == iv:
+        key = match_key(iv)
+        for i, done in enumerate(applied_keys):
+            if not used[i] and done == key:
                 used[i] = True
                 break
         else:

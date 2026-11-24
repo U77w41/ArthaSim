@@ -11,6 +11,7 @@ import hashlib
 import json
 import multiprocessing
 import re
+import shutil
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -18,8 +19,10 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import polars as pl
 
 from arthasim import where
+from arthasim.active import POPULATION_ONLY, check_module
 from arthasim.config import Config
-from arthasim.interventions import Intervention, MacroPath, SetPolicyRate
+from arthasim.dbt.schemes import OLD_AGE_PENSION, PM_KISAN, WOMEN
+from arthasim.interventions import DBTTransfer, Intervention, MacroPath, ParamOverride, SetHook, SetPolicyRate
 from arthasim.params import ParamRegistry
 from arthasim.scenario import Scenario
 from arthasim.stats import interval
@@ -61,13 +64,29 @@ class Experiment:
             if self._prefix(scenario) != prefix:
                 raise ValueError(f"arm {name!r}: its interventions effective before {at.isoformat()} must equal the "
                                  "baseline's, in order, since the arms share that prefix")
-        for scenario in (self.baseline, *self.treatments.values()):
-            for iv in scenario.interventions:
+        # What `World.apply` would check, checked now, so a mistake fails before any seed runs.
+        registry = ParamRegistry.load(_registry_path(self.config), overrides=self.config.param_overrides)
+        population = self.config.builder == "population"
+        modules = [m.name for m in World.default_modules(population)]
+        for name, scenario in (("baseline", self.baseline), *self.treatments.items()):
+            arm = scenario.interventions if name == "baseline" else (*prefix, *self._later(scenario))
+            schemes = {PM_KISAN, OLD_AGE_PENSION, WOMEN}
+            for iv in arm:
                 if iv.effective(start) < start:
                     raise ValueError(f"{type(iv).__name__} takes effect on {iv.effective(start).isoformat()}, "
                                      f"before the run's start {start.isoformat()}")
+                if isinstance(iv, ParamOverride) and iv.param_id not in registry:
+                    raise KeyError(iv.param_id)
+                if isinstance(iv, POPULATION_ONLY) and not population:
+                    raise ValueError(f"{type(iv).__name__} needs a population world (tier S and above)")
                 if isinstance(getattr(iv, "where", None), str):
                     where.check(iv.where)
+                if isinstance(iv, DBTTransfer):
+                    if iv.scheme in schemes:
+                        raise ValueError(f"arm {name!r}: scheme name {iv.scheme!r} is taken")
+                    schemes.add(iv.scheme)
+                if isinstance(iv, SetHook):
+                    check_module(iv.impl, modules)
 
     def _prefix(self, scenario: Scenario) -> list[Intervention]:
         return [iv for iv in scenario.interventions if iv.effective(self.config.start) < self.intervene_at]
@@ -88,11 +107,15 @@ class Experiment:
         if self.path.exists():
             raise FileExistsError(f"experiment folder already exists: {self.path}")
         self.path.mkdir(parents=True)
-        if workers <= 1:
-            folders = [_run_seed(self, s) for s in self.seeds]
-        else:
-            with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as pool:
-                folders = list(pool.map(_run_seed, [self] * len(self.seeds), self.seeds))
+        try:
+            if workers <= 1:
+                folders = [_run_seed(self, s) for s in self.seeds]
+            else:
+                with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn")) as pool:
+                    folders = list(pool.map(_run_seed, [self] * len(self.seeds), self.seeds))
+        except BaseException:
+            shutil.rmtree(self.path, ignore_errors=True)         # an unfinished experiment leaves nothing behind
+            raise
         arms = ["baseline", *self.treatments]
         meta = {"baseline": self.baseline.details(), "arms": {n: s.details() for n, s in self.treatments.items()},
                 "seeds": self.seeds, "intervene_at": self.intervene_at.isoformat(), "end": self.end.isoformat(),

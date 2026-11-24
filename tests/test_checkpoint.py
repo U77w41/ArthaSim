@@ -173,3 +173,16 @@ def test_spike_fork(tmp_path):
     w.run("2025-04-30")
     child = w.fork(path_out=tmp_path / "c").run("2025-05-03")
     assert run_files(child.path) == run_files(plain.path)
+
+
+def test_destinations_inside_the_run_folder_are_refused(tmp_path):
+    w = World.build(XS(tmp_path), 7, path=tmp_path / "r", checkpoints=False)
+    w.run("2025-04-30")
+    for bad in (lambda: w.save(w.path / "ck"), lambda: w.fork(path_out=w.path / "x")):
+        with pytest.raises(ValueError, match="inside"):
+            bad()
+    assert not (w.path / "ck").exists() and not (w.path / "x").exists()     # refused before anything was made
+    w.save(tmp_path / "ck")
+    with pytest.raises(ValueError, match="inside"):
+        World.load(tmp_path / "ck", path_out=tmp_path / "ck" / "x")
+    w.save(w.path / "checkpoints" / "mine")                           # where monthly checkpoints go is fine

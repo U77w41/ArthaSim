@@ -65,6 +65,16 @@ def link_tree(src: Path, dst: Path) -> None:
                 shutil.copy2(here / name, target)
 
 
+def check_destination(src: Path, dst: Path, allow_checkpoints: bool = True) -> None:
+    """A checkpoint, fork or load folder must not lie inside the folder it links from (the copy would walk into
+    itself), except under the run's own `checkpoints/`, which linking skips."""
+    src, dst = Path(src).resolve(), Path(dst).resolve()
+    if dst == src or src in dst.parents:
+        if allow_checkpoints and (src / "checkpoints") in dst.parents:
+            return
+        raise ValueError(f"{dst} is inside {src}; put it outside (or, for a checkpoint, under {src / 'checkpoints'})")
+
+
 def next_free(base: Path) -> Path:
     """`base`, or the first of `base-2`, `base-3`, ... that does not exist."""
     base = Path(base)
@@ -95,6 +105,7 @@ def write(world: "World", path: Path) -> None:
     """Save the world at a month end into a new folder `path`."""
     path = Path(path)
     require_month_end(world)
+    check_destination(world.path, path)
     if path.exists():
         raise FileExistsError(f"checkpoint path already exists: {path}")
     world._flush()

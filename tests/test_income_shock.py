@@ -143,3 +143,20 @@ def test_shocks_that_select_nobody(tmp_path):
     run = world.run("2025-05-02")
     assert run.table("interventions_log").collect()["affected"].to_list() == [0, 0]
     assert events(run, "LAID_OFF", "2025-05-01") == events(plain_run(), "LAID_OFF", "2025-05-01")
+
+
+def test_watchers_see_life_course_and_shock_events(tmp_path):
+    plain = plain_run()
+    retired = plain.sql("""select entity_id from life_events where date = '2025-05-01' and event = 'RETIRED'
+                           order by entity_id limit 1""")["entity_id"][0]
+    salaried = plain.sql("""select entity_id from entity_state_monthly where month = '2025-05'
+                            and life_stage = 'salaried' order by entity_id limit 1""")["entity_id"][0]
+    world = build(tmp_path)
+    world.apply(IncomeShock("2025-05-01", f"entity_id = {salaried}", "layoff", 1.0))
+    seen = {retired: [], salaried: []}
+    for eid, calls in seen.items():
+        world.watch(eid, calls.append)
+    world.run("2025-05-01")
+    events = {eid: [e["event"] for c in calls if c["date"] == date(2025, 5, 1) for e in c["events"]]
+              for eid, calls in seen.items()}
+    assert "RETIRED" in events[retired] and "LAID_OFF" in events[salaried]

@@ -101,10 +101,12 @@ def test_module_swap_from_its_month_start(tmp_path):
     rec = Recorder()
     world.apply(SetHook("module", rec, date="2025-05-01"))
     world.run("2025-04-30")
-    assert world.module("consumption") is not rec
+    assert not isinstance(world.module("consumption"), Recorder)
     run = world.run("2025-05-03")
-    assert world.module("consumption") is rec and world.modules.index(rec) == 6
-    assert rec.days == [date(2025, 5, 1), date(2025, 5, 2), date(2025, 5, 3)]
+    swapped = world.module("consumption")
+    assert isinstance(swapped, Recorder) and world.modules.index(swapped) == 6
+    assert swapped.days == [date(2025, 5, 1), date(2025, 5, 2), date(2025, 5, 3)]
+    assert swapped is not rec and rec.days == []               # the world runs its own copy
     assert data_files(run.path) == data_files(plain.path)            # Recorder behaves as Consumption does
     assert json.loads(log(run)["details"][0])["impl"] == "test_apply.Recorder"
 
@@ -157,3 +159,16 @@ def test_interventions_survive_a_checkpoint(tmp_path):
     resumed = World.load(tmp_path / "ck", path_out=tmp_path / "r", checkpoints=False).run("2025-05-12")
     assert run_files(resumed.path) == run_files(plain.path)
     assert log(resumed)["read_after"].to_list() == [True]
+
+
+def test_a_scenario_with_a_module_swap_matches_after_fork_and_load(tmp_path):
+    s = Scenario.baseline().add(ParamOverride("rail.upi.limit_paise", 100_000, "2025-04-03"),
+                                SetHook("module", Recorder(), date="2025-05-01"))
+    world = build(tmp_path)
+    world.run("2025-04-30", s)
+    child = world.fork(path_out=tmp_path / "child", checkpoints=False)
+    assert log(child.run("2025-05-02", s))["kind"].to_list() == ["ParamOverride", "SetHook"]
+    world.run("2025-05-31", s)
+    world.save(tmp_path / "ck")
+    loaded = World.load(tmp_path / "ck", path_out=tmp_path / "loaded", checkpoints=False)
+    assert log(loaded.run("2025-06-02", s))["kind"].to_list() == ["ParamOverride", "SetHook"]

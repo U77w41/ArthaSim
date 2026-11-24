@@ -33,7 +33,7 @@ from arthasim.ledger.instruments import InstrumentType as T
 from arthasim.params import ParamRegistry
 from arthasim.scenario import Scenario
 from arthasim import checkpoint as _checkpoint
-from arthasim.active import Active, unapplied
+from arthasim.active import Active
 from arthasim import macro as _macro
 from arthasim.store.hashing import RunningHash
 from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, META_TABLES, Store, content_hash, read_table,
@@ -132,11 +132,7 @@ class World:
         self.path = path
         self._date = config.start
         self.counters = Counters()
-        self.modules: list[BehaviourModule] = (
-            [LifeCourse(), Income(), Remittances(), GovernmentTransfers(), Budget(), Allowance(), Consumption(),
-             CashManagement()]
-            if state.population is not None
-            else [SpikeIncome(), SpikeConsumption()])
+        self.modules: list[BehaviourModule] = World.default_modules(state.population is not None)
         self._store = Store(path)
         self._days = 0
         self._payments = 0
@@ -147,6 +143,14 @@ class World:
         self._forked_from: dict[str, str] | None = None
         self.checkpoint_seconds = 0.0            # time spent writing monthly checkpoints (not in wall_seconds)
         self.active = Active()                   # applied interventions and their state
+
+    @staticmethod
+    def default_modules(population: bool) -> list[BehaviourModule]:
+        """The behaviour modules, in order, of a population world or a spike world."""
+        if population:
+            return [LifeCourse(), Income(), Remittances(), GovernmentTransfers(), Budget(), Allowance(), Consumption(),
+                    CashManagement()]
+        return [SpikeIncome(), SpikeConsumption()]
 
     def __getstate__(self) -> dict[str, Any]:
         """What a checkpoint holds: everything but the store, the watchers, the release secret and the keys derived
@@ -199,6 +203,7 @@ class World:
         world, meta = _checkpoint.read(Path(path), release_secret)
         if path_out is not None:
             folder = Path(path_out)
+            _checkpoint.check_destination(Path(path), folder, allow_checkpoints=False)
             if folder.exists():
                 raise FileExistsError(f"run directory already exists: {folder}")
         else:
@@ -226,6 +231,7 @@ class World:
         _checkpoint.require_month_end(self)
         if path_out is not None:
             folder = Path(path_out)
+            _checkpoint.check_destination(self.path, folder)
             if folder.exists():
                 raise FileExistsError(f"run directory already exists: {folder}")
         else:
@@ -331,7 +337,7 @@ class World:
         `add`, applies only what is new)."""
         until = _as_date(until)
         if scenario is not None:
-            for iv in unapplied(self.active.applied, scenario.interventions):
+            for iv in self.active.unapplied(scenario.interventions):
                 self.apply(iv)
         try:
             while self._date <= until:
@@ -361,16 +367,19 @@ class World:
         frames: dict[str, pl.DataFrame] = {}
         # Intervention events follow the life course's (their ids continue its counter); with no life course, last.
         after = "lifecourse" if any(m.name == "lifecourse" for m in self.modules) else None
+
+        def store(tables: dict[str, pl.DataFrame]) -> None:
+            for name, frame in tables.items():
+                self._store.add(name, month, frame)
+                # Watchers see every module's rows of a table, not only the last module's.
+                frames[name] = pl.concat([frames[name], frame]) if name in frames else frame
+
         for module in self.modules:
-            for name, frame in module.tables().items():
-                self._store.add(name, month, frame)
-                frames[name] = frame
+            store(module.tables())
             if module.name == after:
-                for name, frame in self.active.tables().items():
-                    self._store.add(name, month, frame)
+                store(self.active.tables())
         if after is None:
-            for name, frame in self.active.tables().items():
-                self._store.add(name, month, frame)
+            store(self.active.tables())
         self._store.add("payments", month, payments)
         self._store.add("journal", month, journal)
         self._store.add("postings", month, postings)
@@ -453,13 +462,20 @@ class Run:
     def table(self, name: str) -> pl.LazyFrame:
         return read_table(Path(self.path), name, self.months)
 
+    def _whole(self, what: str) -> None:
+        if self.months is not None:
+            raise ValueError(f"{what} reads whole runs; this Run is a window ({self.months[0]} to {self.months[1]}). "
+                             "Use the run itself, or effect(..., window='run').")
+
     def view(self, kind: str, asof: Date | None = None, **scope: Any):
         """What one observer (bank, switch, bureau or truth) sees of this run."""
+        self._whole("A view")
         from arthasim.views import make_view
         return make_view(self, kind, asof=asof, **scope)
 
     def inspect(self, entity_id: int):
         """Follow one person or organisation: profile, timeline, passbook, net worth, social links."""
+        self._whole("inspect")
         from arthasim.inspector import EntityTrace
         return EntityTrace(self, entity_id)
 
@@ -485,6 +501,7 @@ class Run:
     def export(self, dest: str | Path, view: str = "bank", asof: Date | None = None, **scope: Any) -> Path:
         """Write a view to Parquet under `dest`, with a manifest and a data dictionary. Observer views drop every
         simulator ID; a bank export carries the bank's own customer and account numbers."""
+        self._whole("An export")
         from arthasim.export import export_view
         return export_view(self, dest, view=view, asof=asof, **scope)
 

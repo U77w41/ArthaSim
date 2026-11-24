@@ -33,3 +33,10 @@ def test_window_sees_only_its_months():
     assert w.table("persons").collect().height == run.table("persons").collect().height
     assert "balances_monthly" not in w.tables() and w.metric("deposit_balance").height == 0
     assert "balances_monthly" in run.window("2025-04-01", "2025-05-31").tables()
+
+
+def test_a_window_refuses_views_inspection_and_export(tmp_path):
+    w = small_run().window("2025-05-01", "2025-05-31")
+    for call in (lambda: w.view("truth"), lambda: w.inspect(0), lambda: w.export(tmp_path / "x", view="truth")):
+        with pytest.raises(ValueError, match="window"):
+            call()
