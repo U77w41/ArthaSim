@@ -803,3 +803,12 @@ The seven minors deferred by plan 1d-2's final review (above). Built on branch `
   - the baselines, the payees and the APBS credit effect are identical;
   - every other effect moves by less than 0.1%. At the doc's rounding, the cash interval's top goes from ₹1.619 to ₹1.618 crore. Funds declines go from −6,111.3 to −6,112.2 (interval −6,397.6 to −5,826.8, relative −1.60%);
   - cost if wrong: none; the doc records the 1d-2 branch.
+
+# Merging the two plan 1d-2 follow-ups
+
+Both follow-up branches were combined on `claude/nostalgic-wescoff-b80231` from `main` at `9c1ffe2`, keeping history linear: a fast-forward to the checkpoint commit (`1f83083`), then the deferred-minors commit (`bc59bab`) cherry-picked on top.
+- **Conflict.** Only this ledger, where each branch appended a section. Both are kept, checkpoints first. `src/arthasim/world.py`, which both change, merged without a conflict.
+- **Bench** (tier S, 90 days, seed 7; `main` at `9c1ffe2` against the combined tree, one run each): all 20 content hashes are equal, and so is every other field the bench prints except timings, memory and the run path. All 180 Parquet files, in the run and in its two checkpoints, are byte-identical. The two checkpoints took 1.53 s in all on `main` and 0.50 s combined.
+- **Results doc.** `docs/phase1d2_results.md` keeps its 0.73 s checkpoint figure for the 1d-2 branch, with a note giving the bench figures above.
+- **Fast suite:** 465 passed (433 on `main`, plus 17 from the checkpoint branch and 15 from the minors branch).
+- **Slow gates** (`-m slow`): 8 passed in 391 s, run alongside the fast suite.

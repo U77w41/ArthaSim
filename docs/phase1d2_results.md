@@ -75,6 +75,8 @@ A save takes longer than the spec estimated (under 0.2 s a month). A profile of 
 
 So a monthly checkpoint costs about 0.73 s, about 11% of a month's simulation at tier S (6.6 s), and about 85 MB of disk. The flush is the obvious target if that matters; see Limits.
 
+After this plan, a later change rewrites the account tables only when their inputs have changed (ledger, "Cheaper monthly checkpoints execution ledger"). In one bench run each (tier S, 90 days, seed 7), the two monthly checkpoints took 1.53 s in all before it and 0.50 s after, about 0.25 s a month. All 180 Parquet files and all 20 content hashes are byte-identical.
+
 ## A paired experiment: ₹2,000 to every own-account farmer
 
 The experiment:
@@ -131,7 +133,7 @@ Every run of the two experiments has the same content hashes, and every effect a
 
 - **Macro paths have no effect yet.** By the owner's choice, `MacroPath` and `SetPolicyRate` change the recorded paths and nothing reads them in phase 1.
 - **Ten seeds.** The interval is a Student-t interval on ten differences. With skewed differences its coverage would be off. The report states n.
-- **Checkpoint cost.** A monthly checkpoint costs about 0.73 s at tier S, mostly the flush of the account tables, against the spec's estimate of under 0.2 s. Rewriting those tables only when they have changed would recover most of it.
+- **Checkpoint cost.** A monthly checkpoint costs about 0.73 s at tier S, mostly the flush of the account tables, against the spec's estimate of under 0.2 s. Rewriting those tables only when they have changed would recover most of it. A later change does this; see the note under Costs.
 - **One world shape.** The experiment's effects are for this model's farmers and its rules for spending transfer income. They are not estimates for India; plan 1e calibrates and validates the model.
 
 ## Appendix: the hash of every data file
