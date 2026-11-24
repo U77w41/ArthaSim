@@ -57,11 +57,17 @@ class Consumption(BehaviourModule):
     name = "consumption"
 
     def __init__(self) -> None:
-        self._static: dict[int, _Static] = {}
+        self._cache: tuple | None = None         # (state, registry, _Static), reused only for those same objects
+
+    def __getstate__(self) -> dict:
+        state = dict(self.__dict__)
+        state["_cache"] = None
+        return state
 
     def _setup(self, world) -> _Static:
         s = world.state
-        if id(s) not in self._static:
+        cached = self._cache
+        if cached is None or cached[0] is not s or cached[1] is not world.params:
             pop, params = s.population, world.params
             h, o = pop.households, pop.orgs
             L = int(h.locality.max()) + 1 if h.locality.size else 1
@@ -74,10 +80,10 @@ class Consumption(BehaviourModule):
                               params.get("consumption.category_shares.rural")], dtype=np.float64)
             dc = o.merchant_district * N_CAT + o.merchant_category
             dlc = (o.merchant_district * L + o.merchant_locality) * N_CAT + o.merchant_category
-            self._static[id(s)] = _Static(district, h.locality[h.household_of_person], is_metro,
-                                          table[np.where(is_metro, 0, 1)], *_lookup(dc, n_d * N_CAT),
-                                          *_lookup(dlc, n_d * L * N_CAT), L)
-        return self._static[id(s)]
+            self._cache = (s, params, _Static(district, h.locality[h.household_of_person], is_metro,
+                                              table[np.where(is_metro, 0, 1)], *_lookup(dc, n_d * N_CAT),
+                                              *_lookup(dlc, n_d * L * N_CAT), L))
+        return self._cache[2]
 
     def _merchant(self, world, st: _Static, person, cat, entity, day, index):
         """A merchant in the person's district and category, usually in their own locality.

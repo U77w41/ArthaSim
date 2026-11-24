@@ -135,6 +135,7 @@ class World:
         self._payments = 0
         self._wall = 0.0
         self._watchers: dict[int, list[Callable[[dict], None]]] = {}
+        self._params_read: set[str] = set()     # registry ids read on a simulated day
 
     @classmethod
     def build(cls, config: Config, seed: int) -> "World":
@@ -150,6 +151,12 @@ class World:
         for name, frame in _dimension_frames(state, config, draw).items():
             world._store.write_dimension(name, frame)
         return world
+
+    def set_params(self, params: ParamRegistry) -> None:
+        """Replace the registry from now on; the life course's targets follow it."""
+        self.params = params
+        if self.state.life is not None:
+            self.state.life.targets.set_params(params)
 
     @property
     def days_simulated(self) -> int:
@@ -220,7 +227,14 @@ class World:
         started = time.perf_counter()
         day = self._date
         monthly_ran = day.day == 1 or self._days == 0
-        payments, journal, postings = run_day(self, day)
+        reads: set[str] = set()
+        params = self.params
+        params._reads = reads
+        try:
+            payments, journal, postings = run_day(self, day)
+        finally:
+            params._reads = None
+        self._params_read |= reads
         month = f"{day:%Y-%m}"
         if monthly_ran and self.state.behaviour is not None:
             self._store.add("truth_household_monthly", month, _household_monthly(self.state, month))
@@ -272,6 +286,7 @@ class World:
             "days": self._days, "payments": self._payments, "wall_seconds": round(self._wall, 3),
             "content_hash": self._content_hashes(),
             "polars_version": pl.__version__,
+            "params_read": sorted(self._params_read),
         }
         manifest["builder"] = self.config.builder
         if self.state.population is not None:

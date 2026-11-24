@@ -143,8 +143,17 @@ def _on_release_date(day: dt.date, params: ParamRegistry) -> bool:
     return day.isoformat() in {str(d) for d in params.get("dbt.pm_kisan.dates")}
 
 
+@dataclass(frozen=True)
+class _OnDay:
+    """Pays on the day of the month a parameter names. A class, not a closure, so schemes pickle."""
+    param: str
+
+    def __call__(self, day: dt.date, params: ParamRegistry) -> bool:
+        return day.day == int(params.get(self.param))
+
+
 def _on_day(param: str) -> Callable[[dt.date, ParamRegistry], bool]:
-    return lambda day, params: day.day == int(params.get(param))
+    return _OnDay(param)
 
 
 def default_schemes() -> list[Scheme]:

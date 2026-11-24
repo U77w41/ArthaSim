@@ -160,6 +160,13 @@ class Targets:
         self._shares: dict[tuple, np.ndarray] = {}
         self._helper = self._helper_table()
 
+    def set_params(self, params: ParamRegistry) -> None:
+        """Follow a changed registry: the shares are recomputed from it on next use."""
+        self.params = params
+        self.study_max_age = int(params.get("life.study.max_age"))
+        self._annual.clear()
+        self._shares.clear()
+
     def group(self, district: int, sex: int) -> str:
         return group_name(self.kinds[district], sex)
 

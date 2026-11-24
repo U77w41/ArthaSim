@@ -15,8 +15,14 @@ _COLUMNS = ["id", "value", "unit", "as_of", "source", "status", "role"]
 
 
 class ParamRegistry:
+    # While the world simulates a day it sets this to a set, and `get` records every id it serves.
+    _reads: set[str] | None = None
+
     def __init__(self, entries: dict[str, dict[str, Any]]):
         self._entries = entries
+
+    def __contains__(self, param_id: str) -> bool:
+        return param_id in self._entries
 
     @classmethod
     def load(cls, path: str | Path, overrides: Mapping[str, Any] | None = None) -> "ParamRegistry":
@@ -45,7 +51,10 @@ class ParamRegistry:
         return registry
 
     def get(self, param_id: str) -> Any:
-        return self._entries[param_id]["value"]
+        value = self._entries[param_id]["value"]
+        if self._reads is not None:
+            self._reads.add(param_id)
+        return value
 
     def override(self, param_id: str, value: Any) -> "ParamRegistry":
         if param_id not in self._entries:
