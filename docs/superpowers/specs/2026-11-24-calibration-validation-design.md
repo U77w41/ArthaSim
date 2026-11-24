@@ -271,7 +271,8 @@ What may be a gap, and what may not:
 - **Not a gap:** a fitted check that misses. The calibration may be rerun with a wider search, other bounds or more trials, and each rerun is recorded. If it still misses after that, the miss is recorded as a calibration finding with its own ruling, and only then listed.
 - **Predicted before the gate's first run** (from the code, before any calibrated run), so the list is not fitted to the result:
   - `payments.month_start_spike`: employer paydays are drawn uniformly over days 1–28 (`build/pipeline.py`), so no month-start spike can form.
-  - `accounts.zero_balance` and `accounts.inoperative`: every account holder transacts every month; the model has no unused accounts.
+  - `accounts.zero_balance`: every account opens with a deposit (at least `open.deposit_floor_paise`) or, when opened for DBT, receives its credit at once, and automatic withdrawals leave the part of the balance below a whole note; nothing leaves an account at exactly zero for long. (0.09% of basic accounts at the May month end of the uncalibrated bench run, against 9.15%.)
+  - `accounts.inoperative` is **not** predicted: on the uncalibrated bench run 28% of basic accounts had no transaction their holder made in May alone, so over seven months the share could fall either side of the band.
   - `labour.ur.educated` and `labour.ur.graduate_15_29`: life stages carry no education gradient beyond the build's priors.
   - `payments.upi_p2p_per_adult`: the model's P2P flows are allowances, remittances and some earnings, not the informal transfers that make up most real P2P.
   - `holdout.festival_uplift`: the model has no festival behaviour.

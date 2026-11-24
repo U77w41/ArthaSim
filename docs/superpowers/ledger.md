@@ -844,3 +844,52 @@ The project owner handed every decision to this session: decide, ground decision
 - `bank_customers`: `533859ad5f96f63967b0cd764f01d8bf199ca12eae0a0c6c171d6c1a686dcaa9`
 - `macro_paths`: `e2248b03c7d8a6b1f1c99d409aaca793f9ef0d22c20166867af1e1955d3a7171`
 - `interventions_log`: `eac724afc9e3fafc0941a00c17b01b63897b1ef7fe63bcc5e9b9839e09f238c7`
+
+## Rulings
+
+Each gives the ruling, its grounds, then what it costs if wrong. The spec marks the same decisions **Decided**.
+
+**Sources and the registry**
+- Ruling: `verified` means the figure was read in the primary document named, by this plan's research or an earlier plan's. The research subagents fetched documents with WebFetch and read PDFs as text (`pdftotext`); two sources that refused the fetch tool were read in the built-in browser. A ratio of two counts from one table (PMJDY's zero-balance and operative shares) keeps `verified`; a figure that needs a modelling choice (CPI uprating, the 18+ population, the month-start and festival ratios) is `assumption`. Cost if wrong: a reader may want "verified" to mean checked twice by a person; the source notes say who read what and how.
+- Ruling: no existing value changes; only sources and statuses do (pinned by `test_no_value_carried_from_main_changed`, which checks the registry version of the 134 old rows against `main`'s). Cost if wrong: inputs that disagree with their sources stay until a later plan changes them; the one found, `inclusion.debit_card_share` (0.7 of account holders, about 62% of adults, against Findex's 37.6% with a debit card), is a finding.
+- Ruling: appendix A figures that the sources contradict enter with the source's figure, and the notes say what the design doc carried:
+  - "UR graduates aged 21–29: 22.2%" is in no table of PLFS 2025; the row is `labour.ur.graduate_15_29` (Table 21, rural 21.5%, urban 23.2%);
+  - "49.6% urban regular" and "62.7% rural self-employed" are in no cell; the report's 47.6% and 62.4% are used;
+  - PMJDY's "81.2% operative" and "8.2% zero balance" are from August 2022; the window's 73.6% and 9.15% (Lok Sabha question 20, 1 December 2025) are used;
+  - "festival uplift +32%" measures Diwali 2026 against an ordinary 2025 day, or November 2025 against November 2024; the holdout uses October 2025's UPI value per day against the mean of September and November (1.031);
+  - AIDIS's ₹15.9 and ₹27.2 lakh are gross assets, not net worth;
+  - the SIP figure is September 2026; the row holds FY 2025-26's months;
+  - the fraud amount's 22.68 lakh "complaints" are all cybercrime incidents; the amount goes with 19,18,865 financial-fraud complaints.
+  Cost if wrong: none; each is read in the primary document.
+- Ruling: rows with no source found stay in the registry, honestly marked: `pay.skill_premium` (`unverified`), `pay.switch_jump` and `fraud.actor_share` (`assumption`), `cc_on_upi.value.monthly` (`unverified`, from a news report of a parliamentary answer). Cost if wrong: none; nothing reads them in phase 1.
+- Ruling: the savings-balance check against RBI's BSR-2 is dropped. The table is published only on RBI's DBIE portal, which the research could not read, and the Handbook's population-group table mixes in term deposits. The balance check is PMJDY's average (₹4,808). Cost if wrong: month-end balances of savings accounts other than basic ones go unchecked.
+- Ruling: `tests/test_dbt_schemes.py` counts only the `dbt.` rows with role `input` (17), since `dbt.cashout_lag` is a holdout; `test_verified_rows_name_where` also accepts a pointer to the source notes, which give the table and page (`macro.cpi_inflation` relies on that). Cost if wrong: none.
+
+**Targets and the suite**
+- Ruling: the metro archetype stands for urban India and the rural one for rural India, as the life course's alignment already has it. National figures weight them 0.36 and 0.64 (MoSPI's reprint of the 2026 population projection). Cost if wrong: a metro district is richer than urban India's average; calibration pulls it toward an average town.
+- Ruling: the adult population for per-adult rates is 1,016.1 million: persons 15+ on 1 March 2026 less three fifths of the 15–19 band. Cost if wrong: under 1% high for the fiscal year's midpoint.
+- Ruling: HCES rupees are uprated by CPI, April–December 2025 over August 2023 – July 2024 (rural 1.0467, urban 1.0501). Cost if wrong: a few percent on the MPCE target against a ±10% band.
+- Ruling: section 15.3's "salary-day inflow spike" is checked as UPI value on the 1st to 3rd over the 10th to 25th (NPCI daily statistics, May–September 2025, 1.286). Salary credits are not published by day. Cost if wrong: the spike measured is spending and transfers after pay, not the credits themselves.
+- Ruling: the DBT cash-out holdout is Field and others (2022), Table A.5: the only measured distribution of time to withdrawal. Its population is narrow (poor women at bank kiosks in two Madhya Pradesh districts, 2018–19). Cost if wrong: a holdout that represents its population, not India's.
+- Ruling: the flow-matrix invariant (6) is not re-checked from a stored run: it needs each holder's sector, which no table records. It is reported as `skipped`, and the run checked it every day. Cost if wrong: a damaged file that keeps every other invariant but breaks sector flows would pass.
+- Ruling: the same-seed check rebuilds the run's first month and compares every fact table's month and every dimension table but the three account tables. It is skipped for forked or loaded runs, runs with an intervention in the first month, and secret runs without the secret. Cost if wrong: a divergence after the first month is left to the split-run and resume tests.
+- Ruling: every statistic sums integers (paise, counts) before dividing, so DuckDB's parallel float sums cannot make a statistic, and so a calibration, depend on thread timing. Cost if wrong: none found.
+
+**Calibration**
+- Ruling: calibration worlds are `Config.tier("S", persons=10_000)`: section 5.4 names XS for calibration trials, but `Config.tier("XS")` is the spike builder. Cost if wrong: fitted values that do not carry to 100,000 persons; the gate checks them there.
+- Ruling: Optuna's TPE sampler (Optuna 5.1, `multivariate=True`, 20 random start trials), asked one trial at a time, with each trial's seeds in parallel; Optuna becomes a dependency. Cost if wrong: a different Optuna version proposes other values; the fitted file records the version.
+- Ruling: trials run eight months (April to November) and score May to November, not section 15.2's three months. Measured: in a 10,000-person world, basic accounts' mean balance rose from ₹5,975 in May to ₹9,145 in August, and monthly spending rose 20% from May to November; a three-month fit would score levels the gate's window does not have. Cost if wrong: trials take about 2.5 times as long.
+- Ruling: the fitted set is a committed overrides file (`params/calibration/fitted.yaml`), applied with `CalibrationResult.load(path).apply(config)`; the registry defaults do not change. Cost if wrong: default runs stay uncalibrated until the owner adopts the fitted values as defaults (a follow-up).
+- Ruling: the committed calibration runs 400 trials rather than the signature's 200, for 14 free parameters. Cost if wrong: an hour of compute.
+
+**Process**
+- Ruling: the spec's predicted gaps were written before the gate's first run (from the code and the uncalibrated bench run): the month-start spike, zero-balance accounts, unemployment by education and of young graduates, UPI P2P volume, the festival holdout, the debit card ticket and P2P tickets under ₹500. The results compare them with the gate. `accounts.inoperative` was first on the list and was taken off before the gate's first run: the uncalibrated bench run showed 28% of basic accounts idle in a single month, which contradicts the stated reason (that every holder transacts every month). Cost if wrong: none.
+- Ruling: Task 3's tests were written before `statistics.py`, while the Task 1 suite ran, but were first run after it existed; they were not seen red. Tasks 1, 2, 4, 5 and 6 were run red first. Cost if wrong: a statistic test that would pass against a wrong implementation; each recomputes its value with an independent query.
+
+## Bench (after Tasks 1–7)
+
+`scripts/bench.py --tier S --days 90 --seed 7` on the branch: all 20 content hashes equal the reference above, with 15,282,932 payment attempts in both. Of the other fields the bench prints, only `checkpoint_mb` differs (170.7 on `main`, 170.8 on the branch), apart from timings, memory and the run path: each checkpoint's `world.pkl` is about 19 KB larger (77,589,724 against 77,608,802 bytes in April), because the pickled registry holds the 50 new rows.
+
+## Slow gates (before the plan 1e gate)
+
+The 8 existing slow gates pass on the branch (391.9 s, run beside the calibration).
