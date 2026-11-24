@@ -10,6 +10,7 @@ import datetime as dt
 import hashlib
 import json
 import multiprocessing
+import pickle
 import re
 import shutil
 from concurrent.futures import ProcessPoolExecutor
@@ -19,10 +20,11 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import polars as pl
 
 from arthasim import where
-from arthasim.active import POPULATION_ONLY, check_module
+from arthasim.active import POPULATION_ONLY, check_module, check_policy_rate
 from arthasim.config import Config
 from arthasim.dbt.schemes import OLD_AGE_PENSION, PM_KISAN, WOMEN
-from arthasim.interventions import DBTTransfer, Intervention, MacroPath, ParamOverride, SetHook, SetPolicyRate
+from arthasim.interventions import (RAIL_RULES, ChangeRailRule, DBTTransfer, Intervention, MacroPath, ParamOverride,
+                                    SetHook, SetPolicyRate)
 from arthasim.params import ParamRegistry
 from arthasim.scenario import Scenario
 from arthasim.stats import interval
@@ -71,7 +73,7 @@ class Experiment:
         for name, scenario in (("baseline", self.baseline), *self.treatments.items()):
             arm = scenario.interventions if name == "baseline" else (*prefix, *self._later(scenario))
             schemes = {PM_KISAN, OLD_AGE_PENSION, WOMEN}
-            for iv in arm:
+            for i, iv in enumerate(arm):
                 if iv.effective(start) < start:
                     raise ValueError(f"{type(iv).__name__} takes effect on {iv.effective(start).isoformat()}, "
                                      f"before the run's start {start.isoformat()}")
@@ -87,6 +89,8 @@ class Experiment:
                     schemes.add(iv.scheme)
                 if isinstance(iv, SetHook):
                     check_module(iv.impl, modules)
+                if isinstance(iv, SetPolicyRate):
+                    check_policy_rate(registry, [(o.effective(start), j, o) for j, o in enumerate(arm[:i])], iv, i)
 
     def _prefix(self, scenario: Scenario) -> list[Intervention]:
         return [iv for iv in scenario.interventions if iv.effective(self.config.start) < self.intervene_at]
@@ -95,8 +99,16 @@ class Experiment:
         return [iv for iv in scenario.interventions if iv.effective(self.config.start) >= self.intervene_at]
 
     def digest(self) -> str:
-        blob = json.dumps({"config": self.config.hash(), "baseline": self.baseline.details(),
-                           "arms": {n: s.details() for n, s in self.treatments.items()}, "seeds": self.seeds,
+        """12 hex characters naming the default folder: the config, the arms, seeds and dates, and a swapped module's
+        pickled state (its `details` name only the class)."""
+        def arm(scenario: Scenario) -> list[dict[str, Any]]:
+            out = scenario.details()
+            for d, iv in zip(out, scenario.interventions):
+                if isinstance(iv, SetHook):
+                    d["state"] = hashlib.sha256(pickle.dumps(iv.impl, protocol=5)).hexdigest()
+            return out
+        blob = json.dumps({"config": self.config.hash(), "baseline": arm(self.baseline),
+                           "arms": {n: arm(s) for n, s in self.treatments.items()}, "seeds": self.seeds,
                            "intervene_at": self.intervene_at.isoformat(), "end": self.end.isoformat()},
                           sort_keys=True, default=str)
         return hashlib.sha256(blob.encode()).hexdigest()[:12]
@@ -191,6 +203,39 @@ def _table(frame: pl.DataFrame) -> list[str]:
     return lines
 
 
+def _nobody(details: dict[str, Any]) -> str:
+    """Why an intervention affected nobody: nobody selected, or nobody selected it could act on."""
+    selected = details.get("selected", 0)
+    if not selected:
+        return "selected nobody"
+    for key, what in (("not_salaried", "salaried"), ("not_earning", "earning")):
+        if details.get(key) == selected:
+            return f"affected nobody: none of the {selected:,} selected were {what}"
+    return f"affected none of the {selected:,} selected"
+
+
+def _log_lines(r: dict[str, Any], end: dt.date) -> list[str]:
+    """What an `interventions_log` row did, in words, where its table row needs it. `end` is the runs' last day."""
+    name = f"{r['kind']} (seq {r['seq']})"
+    details = json.loads(r["details"])
+    if r["effective"] > end:
+        return [f"- {name} takes effect on {r['effective']}, after the end ({end}): it did nothing in these runs."]
+    out = []
+    if r["kind"] == DBTTransfer.__name__ and dt.date.fromisoformat(details["dates"][0]) > end:
+        out.append(f"- {name} first pays on {details['dates'][0]}, after the end ({end}): it enrolled its payees but "
+                   "paid no credit in these runs.")
+    if r["read_after"] is False:
+        if r["kind"] in (MacroPath.__name__, SetPolicyRate.__name__):
+            out.append(f"- {name} had no effect: nothing reads macro paths in phase 1.")
+        else:
+            pid = (RAIL_RULES[(details["rail"], details["rule"])] if r["kind"] == ChangeRailRule.__name__
+                   else details["param_id"])
+            out.append(f"- {name} had no effect: nothing read `{pid}` on or after {r['effective']}.")
+    if r["affected"] == 0:
+        out.append(f"- {name} {_nobody(details)}.")
+    return out
+
+
 class ExperimentResult:
     def __init__(self, path: str | Path, meta: dict[str, Any]) -> None:
         self.path = Path(path)
@@ -276,17 +321,7 @@ class ExperimentResult:
             out += [f"### {arm}", ""] + _table(log.select("seq", "kind", "effective", "ends", "affected",
                                                          "read_after")) + [""]
             for r in log.iter_rows(named=True):
-                details = json.loads(r["details"])
-                if r["read_after"] is False:
-                    if r["kind"] in (MacroPath.__name__, SetPolicyRate.__name__):
-                        out.append(f"- {r['kind']} (seq {r['seq']}) had no effect: nothing reads macro paths in "
-                                   "phase 1.")
-                    else:
-                        pid = details.get("param_id", "the parameter")
-                        out.append(f"- {r['kind']} (seq {r['seq']}) had no effect: nothing read `{pid}` on or after "
-                                   f"{r['effective']}.")
-                if r["affected"] == 0:
-                    out.append(f"- {r['kind']} (seq {r['seq']}) selected nobody.")
+                out += _log_lines(r, self.end)
             out.append("")
         registry = {row["id"]: row for row in
                     ParamRegistry.load(_registry_path(cfg), overrides=cfg.param_overrides).table().iter_rows(named=True)}

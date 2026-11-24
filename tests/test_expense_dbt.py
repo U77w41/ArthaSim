@@ -104,3 +104,26 @@ def test_expense_shock_at_rate_zero_changes_nothing(tmp_path):
     world.apply(ExpenseShock("2025-05-01", "true", "medical", 0.0))
     run = world.run("2025-06-01")
     assert data_files(run.path) == data_files(plain_run().path)
+
+
+# -- Deferred minors tidy-up -------------------------------------------------------------------------------------------
+
+ON_5_MAY = f"strftime({IST}, '%Y-%m-%d') = '2025-05-05'"
+
+
+def test_a_scenario_credit_and_a_pension_on_one_day_have_their_own_times(tmp_path):
+    """A scenario scheme draws its credit times from its own streams, so a person paid by it and by the old-age
+    pension on the 5th is not credited twice at one instant."""
+    world = build(tmp_path)
+    world.apply(DBTTransfer("TOP_UP", 500, "age >= 60", ["2025-05-05"]))
+    run = world.run("2025-05-05")
+    times = run.sql(f"""select y.payee_account_id as a, y.purpose, y.intent_ts as t from payments y
+                        where y.purpose in ('DBT_OTHER', 'DBT_OLD_AGE_PENSION') and {ON_5_MAY}""")
+    both = (times.filter(pl.col("purpose") == "DBT_OTHER")
+            .join(times.filter(pl.col("purpose") == "DBT_OLD_AGE_PENSION"), on="a", suffix="_pension"))
+    assert both.height >= 20
+    assert (both["t"] == both["t_pension"]).sum() <= both.height // 20
+    pension = plain_run().sql(f"""select y.payee_account_id as a, y.intent_ts as t from payments y
+                                  where y.purpose = 'DBT_OLD_AGE_PENSION' and {ON_5_MAY}""")
+    assert pension.sort("a").equals(times.filter(pl.col("purpose") == "DBT_OLD_AGE_PENSION").select("a", "t")
+                                    .sort("a"))                         # the pension's own times are unchanged

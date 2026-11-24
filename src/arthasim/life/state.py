@@ -33,7 +33,7 @@ class LifeState:
     raise_month: np.ndarray        # int8 per employer, 1-12
     targets: Targets
     last_raise: np.ndarray = None  # int32 month index (year * 12 + month - 1) of the last raise, -9999 none
-    pay_set: np.ndarray = None     # int32 month index when pay was last set by a hire or a switch, -9999 none
+    pay_set: np.ndarray = None     # int32 month index pay was last set (hire, switch, helper flip), -9999 none
     next_event_id: int = 0
 
 

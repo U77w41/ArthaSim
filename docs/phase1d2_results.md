@@ -100,6 +100,8 @@ The payees number 12,824 to 12,954 per seed, a mean of 12,902.2. In every seed, 
 
 Amounts are for the 100,000 simulated adults; multiply by 50 for the population they stand for.
 
+After this plan, a later fix gave scenario DBT schemes their own streams for credit times. Re-run with it, the baselines and the APBS credit effect are identical, and every other effect moves by less than 0.1%. Funds declines become −6,112.2 (−1.60%), and the cash interval's top ₹1.618 crore. See the ledger's "Plan 1d-2 deferred minors tidy-up".
+
 **What it says.**
 - **Cash and spending.** Recipients withdrew ₹1.57 crore in cash, 61% of the transfer, and spent ₹1.68 crore more on goods, services and bills, 65% of it. The two overlap, since withdrawn cash pays for cash purchases.
 - **Timing.** Most of the cash effect falls in November, the pay month, because the transfer counts as household income only in the month it is paid (spec, `DBTTransfer`). December's smaller effect comes from the higher balances carried into that month's budget.

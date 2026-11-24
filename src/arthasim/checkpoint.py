@@ -6,6 +6,7 @@ every file of the run). Loading a pickle runs code: load only checkpoints from y
 from __future__ import annotations
 
 import datetime as dt
+import errno
 import json
 import os
 import pickle
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
     from arthasim.world import World
 
 _SKIP = {"checkpoints"}          # top-level folders a checkpoint or fork never links
+# A link refused for these is copied instead: another file system (EXDEV), one without hard links (EPERM on Linux,
+# ENOTSUP on macOS), or a file at its link limit (EMLINK). Any other error is raised.
+_COPY_ON = {errno.EXDEV, errno.EPERM, errno.EMLINK, errno.ENOTSUP}
 
 
 def at_month_end(world: "World") -> bool:
@@ -45,8 +49,8 @@ def label(world: "World") -> str:
 
 
 def link_tree(src: Path, dst: Path) -> None:
-    """Hard-link every file under `src` into `dst`, keeping relative paths; copy where a link is refused. The
-    top-level checkpoints folder and temporary files are left out."""
+    """Hard-link every file under `src` into `dst`, keeping relative paths; copy where the file system refuses a
+    link (`_COPY_ON`). The top-level checkpoints folder and temporary files are left out."""
     src, dst = Path(src), Path(dst)
     dst.mkdir(parents=True, exist_ok=True)
     for root, dirs, files in os.walk(src):
@@ -61,7 +65,9 @@ def link_tree(src: Path, dst: Path) -> None:
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
                 os.link(here / name, target)
-            except OSError:
+            except OSError as e:
+                if e.errno not in _COPY_ON:
+                    raise
                 shutil.copy2(here / name, target)
 
 

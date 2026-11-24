@@ -10,7 +10,7 @@ import polars as pl
 from arthasim import where
 from arthasim.build.banking import pick_banks
 from arthasim.build.pipeline import dbt_inputs
-from arthasim.dbt.schemes import Scheme, SchemeResult, default_schemes
+from arthasim.dbt.schemes import Scheme, ScenarioScheme, SchemeResult, default_schemes
 from arthasim.engine import rng
 from arthasim.engine.intents import Intents, Rail
 from arthasim.ledger.journal import FlowType, Kind
@@ -97,9 +97,12 @@ class GovernmentTransfers(BehaviourModule):
             deposit = s.person_deposit[who]
             if (deposit < 0).any():
                 raise RuntimeError("an enrolled DBT payee has no bank account")
-            slot = lo + np.minimum((rng.uniform(seed, rng.stream_id("dbt.slot"), who, d) * (hi - lo + 1))
+            # A scenario scheme's credit times use its own streams, so a person it pays on a built-in scheme's day
+            # is not credited twice at one instant; the built-in schemes keep `dbt.slot` and `dbt.offset`.
+            base = scheme.stream if isinstance(scheme, ScenarioScheme) else "dbt"
+            slot = lo + np.minimum((rng.uniform(seed, rng.stream_id(f"{base}.slot"), who, d) * (hi - lo + 1))
                                    .astype(np.int64), hi - lo)
-            off = np.minimum((rng.uniform(seed, rng.stream_id("dbt.offset"), who, d) * 900).astype(np.int64), 899)
+            off = np.minimum((rng.uniform(seed, rng.stream_id(f"{base}.offset"), who, d) * 900).astype(np.int64), 899)
             full = lambda v: np.full(who.size, int(v), dtype=np.int64)
             parts.append(Intents(full(Kind.GOVERNMENT_TRANSFER), full(FlowType.SOCIAL_BENEFIT),
                                  full(s.government.balance_account), deposit, amount, full(Rail.APBS), slot, off,

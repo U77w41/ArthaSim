@@ -10,7 +10,7 @@ import pytest
 
 from arthasim import Config, World
 from arthasim.build import categories as c
-from arthasim.interventions import IncomeShock
+from arthasim.interventions import IncomeShock, ParamOverride
 from arthasim.life.state import month_index
 
 METRO = "district == 'metro_archetype'"
@@ -160,3 +160,25 @@ def test_watchers_see_life_course_and_shock_events(tmp_path):
     events = {eid: [e["event"] for c in calls if c["date"] == date(2025, 5, 1) for e in c["events"]]
               for eid, calls in seen.items()}
     assert "RETIRED" in events[retired] and "LAID_OFF" in events[salaried]
+
+
+# -- Deferred minors tidy-up -------------------------------------------------------------------------------------------
+
+def test_a_pay_cut_is_not_restored_after_a_helper_round_trip(tmp_path):
+    """Own-account earners cut in May, made helpers in June and own-account again in July: their July pay is fresh, so
+    the restore must leave it alone (it used to divide it by 1 - rate)."""
+    world = build(tmp_path)
+    world.apply(IncomeShock("2025-05-01", "life_stage in ('farm', 'self_employed')", "pay_cut", 0.2, months=2))
+    world.apply(ParamOverride("life.within.own_to_helper", 1.0, "2025-06-01"))
+    world.apply(ParamOverride("life.within.helper_to_own", 1.0, "2025-07-01"))
+    run = world.run("2025-07-01")
+    cut = set(run.sql("select entity_id from life_events where event = 'PAY_CUT'")["entity_id"])
+    trip = cut & events(run, "BECAME_HELPER", "2025-06-01") & events(run, "BECAME_OWN_ACCOUNT", "2025-07-01")
+    restored = events(run, "PAY_RESTORED", "2025-07-01")
+    assert trip and restored                                       # both cases met
+    assert not trip & restored
+    fresh = dict(run.sql("""select entity_id, income_after_paise from life_events where date = '2025-07-01'
+                            and event = 'BECAME_OWN_ACCOUNT'""").iter_rows())
+    july = dict(run.sql("""select entity_id, monthly_income_paise from entity_state_monthly
+                           where month = '2025-07'""").iter_rows())
+    assert all(july[e] == fresh[e] for e in trip)

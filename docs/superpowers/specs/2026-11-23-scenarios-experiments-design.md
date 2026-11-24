@@ -160,7 +160,7 @@ Dates are ISO strings or `datetime.date`.
 
 - `world.apply(iv)` registers an intervention. Each type has an effective date (table below). `apply` raises `ValueError` when that date is before `world.date`.
 - `world.run(until, scenario=None)` applies each of the scenario's interventions, then runs.
-- `world.set_hook(kind, impl, bank=None)` is `apply(SetHook(kind, impl, bank, date=world.date))`.
+- `world.set_hook(kind, impl, bank=None)` is `apply(SetHook(kind, impl, bank, date=world.date))`. Before the first day it passes `date=None`, so a world that starts mid-month can swap a module from its first day.
 
 The type checks below happen at `apply`, so a mistake fails before any day runs.
 
@@ -272,7 +272,7 @@ Two more tables follow the series:
 
 The two interventions act on the series as follows:
 - **`MacroPath(name, series)`** replaces the named series from its earliest date on; the history before that date is kept. An unknown name raises `ValueError`.
-- **`SetPolicyRate(date, change_bp)`** adds `change_bp / 100` percentage points to every `policy_rate` value in force from `date` on. A step at `date` is created if none exists.
+- **`SetPolicyRate(date, change_bp)`** adds `change_bp / 100` percentage points to every `policy_rate` value in force from `date` on. A step at `date` is created if none exists. A rate must be in force on `date`, in the series as the interventions before it will leave it; `apply` and `Experiment` construction refuse one dated before the series' first step.
 
 Both set `read_after` like a parameter override. In phase 1 it is always false, and the report says that nothing reads the series yet.
 
@@ -334,7 +334,7 @@ A scheme that the `dbt` module holds alongside its three built-in schemes.
 - **`where`.** Evaluated each month, like the built-in rules.
 - **Enrolment.** Everyone selected is enrolled (coverage 1), in each month from the month of the earliest date to the month of the latest. Narrowing who is paid is what `where` is for.
 - **Accounts.** An enrolled payee without a bank account opens one that month, as for the built-in schemes.
-- **Credits.** Every enrolled payee is credited on each date, by APBS, with slots 24 to 39 as for the other schemes, and a new purpose `DBT_OTHER = 22`.
+- **Credits.** Every enrolled payee is credited on each date, by APBS, with slots 24 to 39 as for the other schemes, and a new purpose `DBT_OTHER = 22`. The slot and second are drawn from the intervention's own streams (`<stream>.slot`, `<stream>.offset`), so a person also paid by a built-in scheme that day gets a different time.
   - In the views, APBS narrations name `DBT_OTHER`.
   - The scheme's name is in the truth layer only.
 - **Transfer income.** The scheme counts as transfer income in the month it pays, at the amount paid that month. It counts nothing in other months.
@@ -407,7 +407,7 @@ At most two worlds are in memory at once.
 
 ### Folders and reopening
 
-- `path` defaults to `<config.out_dir>/experiment-<digest>`. The digest is 12 hex characters of a SHA-256 over the config hash, the scenarios' JSON, the seeds, `intervene_at` and `end`. An existing folder raises `FileExistsError`.
+- `path` defaults to `<config.out_dir>/experiment-<digest>`. The digest is 12 hex characters of a SHA-256 over the config hash, the scenarios' JSON (with the SHA-256 of each swapped module's pickle), the seeds, `intervene_at` and `end`. An existing folder raises `FileExistsError`.
 - `experiment.json` records the arms, their interventions, the seeds, the dates, the config without the secret, and each run's folder.
 - `ExperimentResult.open(path)` reopens a finished experiment.
 

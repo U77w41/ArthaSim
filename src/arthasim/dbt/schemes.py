@@ -57,12 +57,14 @@ class Scheme:
 @dataclass(frozen=True)
 class ScenarioScheme:
     """A scenario's transfer (`DBTTransfer`): everyone `where` selects is enrolled, each month from the earliest
-    date's month to the latest's, and credited `amount_paise` on each date."""
+    date's month to the latest's, and credited `amount_paise` on each date. Its credit times draw from its
+    intervention's own streams, `<stream>.slot` and `<stream>.offset`, not the built-in schemes' `dbt.*`."""
     name: str
     amount_paise: int
     where: str
     dates: tuple[dt.date, ...]
     seq: int
+    stream: str
     purpose: int = int(Purpose.DBT_OTHER)
 
     def active(self, first: dt.date) -> bool:

@@ -277,8 +277,9 @@ class World:
         self.active.apply(self, intervention)
 
     def set_hook(self, kind: str, impl: Any, bank: str | None = None) -> None:
-        """`apply(SetHook(kind, impl, bank, date=world.date))`."""
-        self.apply(SetHook(kind, impl, bank, date=self._date))
+        """`apply(SetHook(kind, impl, bank, date=world.date))`; before the first day, `date=None` (the run's first day,
+        which need not be a month start)."""
+        self.apply(SetHook(kind, impl, bank, date=None if self._days == 0 else self._date))
 
     def module(self, name: str) -> BehaviourModule:
         for m in self.modules:

@@ -264,11 +264,14 @@ class _Cycle:
             self.open(log, unbanked, banks)
 
     def helpers(self, log: EventLog, moved: np.ndarray) -> None:
+        """Flips between helper and own-account. Each sets pay afresh, so each stamps `pay_set` (a pay cut is then
+        not reversed onto the new pay)."""
         p, a, life, params = self.p, self.a, self.life, self.params
         stage = p.life_stage
         orphan = np.flatnonzero(orphaned(stage, self.hh, life.helper))
         if orphan.size:
             life.helper[orphan] = False
+            life.pay_set[orphan] = self.m
             income = entry_income(self.s, params, orphan, stage[orphan], a.sector[orphan].astype(np.int64),
                                   self.z("life.own_pay")[orphan])
             self.set_income(orphan, income)
@@ -281,6 +284,7 @@ class _Cycle:
         to_own = np.flatnonzero(stay & life.helper & (flip < float(params.get("life.within.helper_to_own"))))
         if to_own.size:
             life.helper[to_own] = False
+            life.pay_set[to_own] = self.m
             income = entry_income(self.s, params, to_own, stage[to_own], a.sector[to_own].astype(np.int64),
                                   self.z("life.own_pay", 1)[to_own])
             self.set_income(to_own, income)
@@ -301,6 +305,7 @@ class _Cycle:
         if to_helper.size:
             before = a.monthly_income_paise[to_helper].copy()
             life.helper[to_helper] = True
+            life.pay_set[to_helper] = self.m
             self.set_income(to_helper, np.zeros(to_helper.size, dtype=np.int64))
             log.add(self.s.person_ids[to_helper], "BECAME_HELPER", income_before=before, income_after=0)
 

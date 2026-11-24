@@ -1,12 +1,14 @@
 """Save, load and fork at month ends (plan 1d-2, Tasks 3 and 4)."""
+import errno
 import json
+import os
 from datetime import date
 from pathlib import Path
 
 import polars as pl
 import pytest
 
-from arthasim import Config, World
+from arthasim import Config, World, checkpoint
 from arthasim.engine.rng import KeyedSeed
 from helpers import run_files
 from run_fixture import RELEASE_SECRET
@@ -186,3 +188,30 @@ def test_destinations_inside_the_run_folder_are_refused(tmp_path):
     with pytest.raises(ValueError, match="inside"):
         World.load(tmp_path / "ck", path_out=tmp_path / "ck" / "x")
     w.save(w.path / "checkpoints" / "mine")                           # where monthly checkpoints go is fine
+
+
+# -- Deferred minors tidy-up -------------------------------------------------------------------------------------------
+
+def _refuse_links(monkeypatch, code):
+    def link(src, dst):
+        raise OSError(code, os.strerror(code))
+    monkeypatch.setattr(checkpoint.os, "link", link)
+
+
+@pytest.mark.parametrize("code", [errno.EXDEV, errno.EPERM, errno.EMLINK, errno.ENOTSUP])
+def test_link_tree_copies_where_a_link_is_refused(tmp_path, monkeypatch, code):
+    (tmp_path / "src" / "a").mkdir(parents=True)
+    (tmp_path / "src" / "a" / "f.parquet").write_bytes(b"data")
+    _refuse_links(monkeypatch, code)
+    checkpoint.link_tree(tmp_path / "src", tmp_path / "dst")
+    assert (tmp_path / "dst" / "a" / "f.parquet").read_bytes() == b"data"
+
+
+@pytest.mark.parametrize("code", [errno.EACCES, errno.ENOSPC, errno.EEXIST])
+def test_link_tree_raises_other_link_errors(tmp_path, monkeypatch, code):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "f.parquet").write_bytes(b"data")
+    _refuse_links(monkeypatch, code)
+    with pytest.raises(OSError) as e:
+        checkpoint.link_tree(tmp_path / "src", tmp_path / "dst")
+    assert e.value.errno == code

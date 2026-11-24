@@ -1,14 +1,18 @@
 """Experiments, sweeps and reports (plan 1d-2, Task 10)."""
 import functools
+import hashlib
 import json
 import tempfile
+from datetime import date
 
 import polars as pl
 import pytest
 
 from arthasim import Config, Experiment, ExperimentResult, Scenario, World
 from arthasim.engine.intents import Intents
-from arthasim.interventions import DBTTransfer, ParamOverride, SetHook
+from arthasim.experiment import _log_lines
+from arthasim.interventions import (ChangeRailRule, DBTTransfer, IncomeShock, MacroPath, ParamOverride, SetHook,
+                                    SetPolicyRate)
 from arthasim.modules.spending import Consumption
 from arthasim.modules.spike import SpikeConsumption
 from helpers import P, run_files
@@ -198,3 +202,72 @@ def test_a_failed_run_leaves_no_folder(tmp_path):
     assert not (tmp_path / "e").exists()
     with pytest.raises(RuntimeError, match="boom"):                   # the same error again, not FileExistsError
         exp.run()
+
+
+# -- Deferred minors tidy-up -------------------------------------------------------------------------------------------
+
+def _lines(log, end):
+    return [line for r in log.iter_rows(named=True) for line in _log_lines(r, end)]
+
+
+def test_report_lines_for_people_selected_but_not_affected_and_for_dates_after_the_end(tmp_path):
+    world = World.build(config(tmp_path), 1, path=tmp_path / "run", checkpoints=False)
+    for iv in (IncomeShock("2025-04-01", "life_stage == 'retired'", "layoff", 0.5),
+               IncomeShock("2025-04-01", "life_stage == 'retired'", "pay_cut", 0.5, months=1),
+               IncomeShock("2025-04-01", "age > 500", "layoff", 0.5),
+               ParamOverride("rail.upi.limit_paise", 100_000, "2025-04-03"),
+               ChangeRailRule("2025-05-01", "UPI", "per_txn_limit", 100_000),
+               DBTTransfer("LATE", 2000, "life_stage == 'retired'", ["2025-04-20"])):
+        world.apply(iv)
+    log = world.run("2025-04-02").table("interventions_log").collect()
+    retired = json.loads(log["details"][0])["selected"]
+    assert retired > 0 and json.loads(log["details"][1])["selected"] == retired
+    assert _lines(log, date(2025, 4, 2)) == [
+        f"- IncomeShock (seq 0) affected nobody: none of the {retired:,} selected were salaried.",
+        f"- IncomeShock (seq 1) affected nobody: none of the {retired:,} selected were earning.",
+        "- IncomeShock (seq 2) selected nobody.",
+        "- ParamOverride (seq 3) takes effect on 2025-04-03, after the end (2025-04-02): it did nothing in these runs.",
+        "- ChangeRailRule (seq 4) takes effect on 2025-05-01, after the end (2025-04-02): it did nothing in these "
+        "runs.",
+        "- DBTTransfer (seq 5) first pays on 2025-04-20, after the end (2025-04-02): it enrolled its payees but paid "
+        "no credit in these runs."]
+
+
+def test_report_names_a_rail_rule_s_parameter():
+    row = {"seq": 0, "kind": "ChangeRailRule", "effective": date(2025, 5, 1), "affected": None, "read_after": False,
+           "details": json.dumps({"date": "2025-05-01", "rail": "UPI", "rule": "per_txn_limit", "value": 1})}
+    assert _log_lines(row, date(2025, 5, 3)) == [
+        "- ChangeRailRule (seq 0) had no effect: nothing read `rail.upi.limit_paise` on or after 2025-05-01."]
+
+
+class Limited(SpikeConsumption):
+    """Spike spending with a setting."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = limit
+
+
+def test_the_default_folder_follows_a_swapped_module_s_settings():
+    cfg = Config.tier("XS", persons=500, employers=10, merchants=30, out_dir="/nonexistent/out")
+
+    def folder(limit):
+        arm = BASE.add(SetHook("module", Limited(limit), date="2025-05-01"))
+        return Experiment(cfg, BASE, {"swap": arm}, [1], "2025-05-01", "2025-05-03").path
+
+    assert folder(20) == folder(20) and folder(20) != folder(30)
+    # Experiments without a module swap keep the folder names they had (the digest as it was before swaps counted).
+    arm = BASE.add(ParamOverride("rail.upi.limit_paise", 100000, "2025-05-02"))
+    same = Experiment(cfg, BASE, {"a": arm}, [1, 2], "2025-05-01", "2025-05-03")
+    before = json.dumps({"config": cfg.hash(), "baseline": BASE.details(), "arms": {"a": arm.details()},
+                         "seeds": [1, 2], "intervene_at": "2025-05-01", "end": "2025-05-03"},
+                        sort_keys=True, default=str)
+    assert same.digest() == hashlib.sha256(before.encode()).hexdigest()[:12]
+
+
+def test_a_policy_rate_change_before_the_series_is_refused_at_construction(tmp_path):
+    cfg = Config.tier("XS", persons=500, employers=10, merchants=30, out_dir=str(tmp_path), start="2025-01-01")
+    early = SetPolicyRate("2025-01-15", -25)
+    with pytest.raises(ValueError, match="2025-02-07"):
+        Experiment(cfg, BASE, {"x": BASE.add(early)}, [1], "2025-01-01", "2025-01-20")
+    Experiment(cfg, BASE, {"x": BASE.add(MacroPath("policy_rate", {"2025-01-01": 6.5}), early)}, [1], "2025-01-01",
+               "2025-01-20")

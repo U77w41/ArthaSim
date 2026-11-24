@@ -9,6 +9,7 @@ from arthasim.interventions import (ChangeRailRule, IncomeShock, MacroPath, Para
                                     SetPolicyRate)
 from arthasim.modules.base import BehaviourModule
 from arthasim.modules.spending import Consumption
+from arthasim.modules.spike import SpikeConsumption
 from arthasim.scenario import Scenario
 from helpers import data_files, run_files
 
@@ -172,3 +173,46 @@ def test_a_scenario_with_a_module_swap_matches_after_fork_and_load(tmp_path):
     world.save(tmp_path / "ck")
     loaded = World.load(tmp_path / "ck", path_out=tmp_path / "loaded", checkpoints=False)
     assert log(loaded.run("2025-06-02", s))["kind"].to_list() == ["ParamOverride", "SetHook"]
+
+
+# -- Deferred minors tidy-up -------------------------------------------------------------------------------------------
+
+class SpikeRecorder(SpikeConsumption):
+    """Spike spending that notes the days it runs."""
+
+    def __init__(self) -> None:
+        self.days = []
+
+    def intents(self, world, day):
+        self.days.append(day)
+        return super().intents(world, day)
+
+
+def test_set_hook_on_a_fresh_world_that_starts_mid_month(tmp_path):
+    cfg = Config.tier("XS", persons=500, employers=10, merchants=30, out_dir=str(tmp_path), start="2025-04-15")
+    world = World.build(cfg, 7, path=tmp_path / "run", checkpoints=False)
+    world.set_hook("module", SpikeRecorder())
+    run = world.run("2025-04-16")
+    assert world.module("spike_consumption").days == [date(2025, 4, 15), date(2025, 4, 16)]
+    assert log(run)["effective"].to_list() == [date(2025, 4, 15)]
+    with pytest.raises(ValueError, match="1st"):
+        world.set_hook("module", SpikeRecorder())                     # mid-month after the first day: refused
+
+
+def build_january(path):
+    """A spike world from 1 January 2025, before the repo-rate series' first step (7 February 2025)."""
+    cfg = Config.tier("XS", persons=500, employers=10, merchants=30, out_dir=str(path), start="2025-01-01")
+    return World.build(cfg, 7, path=path / "run", checkpoints=False)
+
+
+def test_a_policy_rate_change_needs_a_rate_in_force_at_apply(tmp_path):
+    world = build_january(tmp_path / "a")
+    with pytest.raises(ValueError, match="2025-02-07"):
+        world.apply(SetPolicyRate("2025-01-15", -25))
+    world.apply(SetPolicyRate("2025-02-07", -25))                       # on the first step: fine
+    # A macro path that starts earlier, applied first, gives the change a rate to move.
+    world = build_january(tmp_path / "b")
+    world.apply(MacroPath("policy_rate", {"2025-01-01": 6.5}))
+    world.apply(SetPolicyRate("2025-01-15", -25))
+    world.run("2025-01-15")
+    assert world.macro("policy_rate", "2025-01-20") == 6.25

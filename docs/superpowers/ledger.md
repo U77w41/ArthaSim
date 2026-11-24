@@ -757,3 +757,49 @@ Best of five at the end of April, on a quieter machine: the marker takes 10.5 ms
 - **In the tests,** a warm memo's tables equal a plain rebuild's byte for byte, after new accounts open. The flushed tables equal a full rebuild at each step and at month ends, and each checkpoint's tables equal those its loaded world rewrites.
 - **Fast suite:** 450 passed (433 before, plus 17).
 - **Slow gates** (`-m slow`): 8 passed in 222 s.
+
+# Plan 1d-2 deferred minors tidy-up
+
+The seven minors deferred by plan 1d-2's final review (above). Built on branch `claude/gallant-nightingale-adfe1a` from `main` at `9c1ffe2`, executed inline. Each fix has a test that failed first, then passed.
+
+## Fixes
+
+- **A pay cut reversed onto fresh pay after a helper round trip.**
+  - The life course's three helper flips now stamp `life.pay_set`: to helper, back to own-account, and a helper whose household lost its business. So `_restore` sees that the pay was reset.
+  - `pay_set` is otherwise read only for raise tenure. Raises go only to the salaried, who are never helpers, so a run without a scenario is unchanged.
+  - `test_a_pay_cut_is_not_restored_after_a_helper_round_trip` forces both flips with parameter overrides. It failed with the round-trippers in `PAY_RESTORED`.
+- **`link_tree` copied on any `OSError`.** It now copies only for EXDEV, EPERM (Linux, a file system without hard links), EMLINK and ENOTSUP (macOS's code for the same), and raises anything else.
+  - The tests patch `os.link` to refuse with each code. EACCES, ENOSPC and EEXIST failed first, since they were copied.
+  - The four copy cases passed at RED by design: they guard the fallback.
+- **`world.set_hook` on a fresh world that starts mid-month.** It now passes `date=None` before the first day. `test_set_hook_on_a_fresh_world_that_starts_mid_month` failed with "2025-04-15 is not the 1st".
+- **Report gaps.** The per-row lines moved, unchanged, into `_log_lines` (`test_report` passed), and then:
+  - an intervention effective after `end` gets one line, "takes effect on …, after the end (…): it did nothing in these runs", in place of the others;
+  - a DBT transfer whose first credit falls after `end` says it enrolled its payees but paid no credit;
+  - the `ChangeRailRule` line names `rail.upi.limit_paise`;
+  - a layoff or pay cut whose selected people include no salaried or earning person says "affected nobody: none of the N selected were salaried" (or "earning");
+  - one that selected people but drew none says "affected none of the N selected".
+  - Tests: `test_report_lines_for_people_selected_but_not_affected_and_for_dates_after_the_end`, on real log rows from a run, and `test_report_names_a_rail_rule_s_parameter`, on a hand-made row. The scheduler reads the UPI limit every day, so no run leaves a rail rule unread within its window.
+- **The default experiment digest.** A module swap's entry now carries the SHA-256 of its module's pickle, so experiments that differ only in a module's settings get different folders.
+  - Experiments without a module swap keep their digests. The test checks one against the earlier formula, restated; that assertion passed at RED by design. Its digest, `c9d1032e17d7`, is the same on `main`.
+- **Scenario DBT credit times.** A scenario scheme draws its slot and second from its intervention's streams, `<stream>.slot` and `<stream>.offset`. The built-in schemes keep `dbt.slot` and `dbt.offset`.
+  - At RED, a ₹500 top-up to everyone aged 60 or more on 5 May paid 78 people who also got the old-age pension that day, and all 78 pairs had equal timestamps. Now none do.
+  - The pension's own times are unchanged.
+- **A `SetPolicyRate` dated before the series' first step.** `check_policy_rate` replays the pending parameter interventions that act before it, in the order they will act, and refuses it if no rate is in force on its date. `world.apply` and `Experiment` construction call it.
+  - A macro path that starts earlier, applied first, makes it valid.
+  - Both tests failed first: nothing was raised.
+- **Spec.** Its passages on `set_hook`, `SetPolicyRate`, scenario DBT credits and the experiment digest now match the code.
+
+## Checks
+
+- **Baseline.** `scripts/bench.py --tier S --days 90 --seed 7` on `main` and on the branch: all 20 tables have equal content hashes, with 15,282,932 payment attempts each.
+- **Suites.** Fast: 448 passed in 199 s (433 before, 15 new). Slow gates: 8 passed in 675 s, run beside the experiment below.
+
+## Rulings
+
+- **`ScenarioScheme` gains a required `stream` field, and `_CODE_VERSION` stays 0.0.1.** The `dbt` module's pickled `_results` can hold `ScenarioScheme`s. They are rebuilt at each month start before any credit, so a checkpoint from before this change still loads and runs. Cost if wrong: a load error naming `stream`.
+- **`new_value` and `check_policy_rate` are module functions in `active.py`,** so `Experiment` can call them; `Active._new_value` is gone. Cost if wrong: none.
+- **EOPNOTSUPP is not in the copy list.** On Linux it equals ENOTSUP. On macOS, `link(2)` documents ENOTSUP for a file system without links. Cost if wrong: such a file system raises instead of copying.
+- **`docs/phase1d2_results.md` keeps its figures, with a note.** Its DBT experiment ran before this change, and the arm's credit times now come from the scheme's own streams. Re-run here (`--part experiment --workers 4 --seeds 1-10`, 481 s):
+  - the baselines, the payees and the APBS credit effect are identical;
+  - every other effect moves by less than 0.1%. At the doc's rounding, the cash interval's top goes from ₹1.619 to ₹1.618 crore. Funds declines go from −6,111.3 to −6,112.2 (interval −6,397.6 to −5,826.8, relative −1.60%);
+  - cost if wrong: none; the doc records the 1d-2 branch.

@@ -25,6 +25,7 @@ from arthasim.life.events import EventLog
 from arthasim.life.jobs import recompute_payroll
 from arthasim.life.state import month_index
 from arthasim.modules.base import BehaviourModule
+from arthasim.params import ParamRegistry
 from arthasim.store.parquet import LOG_SCHEMA
 
 if TYPE_CHECKING:
@@ -43,6 +44,30 @@ def target_param(iv: Intervention) -> str:
     if isinstance(iv, MacroPath):
         return macro.param_id(iv.name)
     return macro.param_id("policy_rate")
+
+
+def new_value(params: ParamRegistry, iv: Intervention) -> Any:
+    """The value a parameter, rail or macro intervention gives its parameter, given the registry it acts on."""
+    if isinstance(iv, (ParamOverride, ChangeRailRule)):
+        return iv.value
+    if isinstance(iv, MacroPath):
+        return macro.replace_from(macro.steps(params, iv.name), iv.series)
+    return macro.add_from(macro.steps(params, "policy_rate"), iv.date, iv.change_bp / 100)
+
+
+def check_policy_rate(params: ParamRegistry, pending: list[tuple[dt.date, int, Intervention]], iv: SetPolicyRate,
+                      seq: int) -> None:
+    """A `SetPolicyRate` needs a repo rate in force on its date, in the series as it will then stand: `params`
+    changed by the `pending` (effective date, seq, intervention) that act before it, on an earlier day or earlier on
+    its own day."""
+    pid = macro.param_id("policy_rate")
+    for effective, s, other in sorted(pending, key=lambda t: (t[0], t[1])):
+        if (effective, s) < (iv.date, seq) and isinstance(other, PARAM_KINDS) and target_param(other) == pid:
+            params = params.override(pid, new_value(params, other))
+    steps = macro.steps(params, "policy_rate")
+    if macro.value_on(steps, iv.date) is None:
+        first = f"; the series starts on {steps[0][0].isoformat()}" if steps else ""
+        raise ValueError(f"SetPolicyRate on {iv.date.isoformat()}: no repo rate is in force then to change{first}")
 
 
 def check_module(impl: Any, names: list[str]) -> bytes:
@@ -143,6 +168,9 @@ class Active:
         return row.seq
 
     def _check_more(self, world: "World", iv: Intervention) -> None:
+        if isinstance(iv, SetPolicyRate):
+            check_policy_rate(world.params, [(r.effective, r.seq, r.iv) for r in self.rows if not r.done], iv,
+                              len(self.rows))
         if isinstance(iv, DBTTransfer):
             taken = {PM_KISAN, OLD_AGE_PENSION, WOMEN}
             taken |= {s.name for s in getattr(_module(world, "dbt"), "schemes", [])}
@@ -159,7 +187,7 @@ class Active:
         for row in self.rows:
             if row.done or row.effective > day or not isinstance(row.iv, PARAM_KINDS):
                 continue
-            world.set_params(world.params.override(target_param(row.iv), self._new_value(world, row.iv)))
+            world.set_params(world.params.override(target_param(row.iv), new_value(world.params, row.iv)))
             row.done = True
         if day.day == 1 or world.days_simulated == 0:
             for row in self.rows:
@@ -167,14 +195,6 @@ class Active:
                     continue
                 self._swap(world, row.iv.impl)
                 row.done = True
-
-    @staticmethod
-    def _new_value(world: "World", iv: Intervention) -> Any:
-        if isinstance(iv, (ParamOverride, ChangeRailRule)):
-            return iv.value
-        if isinstance(iv, MacroPath):
-            return macro.replace_from(macro.steps(world.params, iv.name), iv.series)
-        return macro.add_from(macro.steps(world.params, "policy_rate"), iv.date, iv.change_bp / 100)
 
     @staticmethod
     def _swap(world: "World", impl: BehaviourModule) -> None:
@@ -199,7 +219,8 @@ class Active:
         out = []
         for row in self.rows:
             if isinstance(row.iv, DBTTransfer):
-                sch = ScenarioScheme(row.iv.scheme, row.iv.amount_paise, row.iv.where, tuple(row.iv.dates), row.seq)
+                sch = ScenarioScheme(row.iv.scheme, row.iv.amount_paise, row.iv.where, tuple(row.iv.dates), row.seq,
+                                     row.iv.stream())
                 if sch.active(first):
                     out.append(sch)
         return out
