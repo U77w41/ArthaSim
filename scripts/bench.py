@@ -13,6 +13,7 @@ import os
 import resource
 import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import yaml
@@ -35,6 +36,22 @@ def parse_set(text: str) -> tuple[str, object]:
     if isinstance(value, float) and not math.isfinite(value):
         raise argparse.ArgumentTypeError(f"--set {key} needs a finite number, got {raw!r}")
     return key, value
+
+
+def checkpoint_bytes(run_path: str) -> int:
+    """Disk the run's monthly checkpoints add: files under `checkpoints/` whose inode the run folder does not
+    already hold (a checkpoint's `run/` hard-links the run's own files), each inode counted once."""
+    root = Path(run_path)
+    own = {(st.st_dev, st.st_ino) for f in root.rglob("*") if f.is_file()
+           and f.relative_to(root).parts[0] != "checkpoints" for st in [f.stat()]}
+    extra: dict[tuple[int, int], int] = {}
+    if (root / "checkpoints").exists():
+        for f in (root / "checkpoints").rglob("*"):
+            if f.is_file():
+                st = f.stat()
+                if (st.st_dev, st.st_ino) not in own:
+                    extra[(st.st_dev, st.st_ino)] = st.st_size
+    return sum(extra.values())
 
 
 def main(argv: list[str] | None = None) -> dict:
@@ -78,6 +95,9 @@ def main(argv: list[str] | None = None) -> dict:
         "param_overrides": overrides,
         "release_secret": m["release_secret"],
         "run_path": run.path,
+        "checkpoint_seconds": round(world.checkpoint_seconds, 2),
+        "checkpoint_mb": round(checkpoint_bytes(run.path) / 1e6, 1),
+        "content_hash": m["content_hash"],
     }
     if m.get("builder") == "population":
         count = lambda sql: int(run.sql(sql)["n"][0])
