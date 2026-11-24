@@ -577,3 +577,54 @@ Suite after fixes: 333 passed.
 - the under-32 rule is not tested on its own;
 - stale `seed: int` annotations;
 - no domain tag on the source label key.
+
+# Plan 1d-2 (scenarios and experiments) execution ledger
+
+Plan: `docs/superpowers/plans/2026-11-24-arthasim-plan-1d2-scenarios-experiments.md`. Spec: `docs/superpowers/specs/2026-11-23-scenarios-experiments-design.md`. Sources: `docs/sources/macro.md`. Results: `docs/phase1d2_results.md`.
+Run on an Apple M5 with Python 3.12 (numba 0.68.1, polars 2.1.0, duckdb 2.0.1), from a scratch virtual environment with `PYTHONPATH=src`. Built on branch `claude/nostalgic-wescoff-b80231` in its own git worktree, from `main` at `21eecc9`. Executed inline (native), with one fresh Opus review of the whole branch.
+
+The project owner chose to record macro paths only (approach A). The owner handed the rest of the how to this session: decide the way the real system works, from public evidence, and record each decision with its source. The spec marks those decisions **Decided**.
+
+A builder-check subagent read the spec first. It raised three points, each settled in the spec without the owner:
+- **The window an effect measures.** Effects default to the arms' window, from `intervene_at` to `end`.
+- **A 100% pay cut.** It cannot be reversed, so a pay cut's rate must be under 1.
+- **`Targets` keeping the build's registry.** It now follows the live one.
+
+## Tasks
+
+| Task | Commits | Tests |
+| :--- | :--- | :--- |
+| 1. Macro series, metadata tables, atomic rewrites | `8326aa8` | 30 passed; full suite 340 |
+| 2. Live parameters | `0229cb3` | full suite 344 |
+| 3. Save and load | `44ed1aa` | 8 passed |
+| 4. Fork, monthly checkpoints, `run.fork_at` | `dc49b5e` | full suite 356 |
+| 5. Interventions, `Scenario`, `where` | `ef8ff7a` | 21 passed |
+| 6. Applying parameters, rails, macro paths, module swaps | `b9184af` | full suite 385 |
+| 7. Income shocks | `53ffbf3` | full suite 390 |
+| 8. Expense shocks and scenario DBT | `ceef8ec` | 20 passed |
+| 9. Windowed runs and the t interval | `10e0223` | full suite 406 |
+| 10. Experiments, sweeps, reports | `1869d73` | full suite 426 |
+| 11. Bench, gate, results script, results | `7d04b2f` and this commit | 2 slow gates pass (122 s) |
+
+The reference hashes of `main` were recorded before any code changed: 18 tables, from `scripts/bench.py --tier S --days 90 --seed 7`. After the branch, all 18 are equal.
+
+## Rulings
+
+- **Task 3.** `RunningHash.clone` landed with Task 3's hashing change rather than Task 4's. It is in the same file and only fork uses it. Cost if wrong: none.
+- **Task 5.** `DBTTransfer` accepts an amount whose paise are within 1e-6 of a whole number, not the plan's 1e-9. Float error in amounts above about ₹10 lakh exceeds 1e-9 (1234567891.0000002), and ₹2,000.555 is still refused. Cost if wrong: none.
+- **Task 7.** `test_layoff_shift_is_clamped` passed at RED: with no layoffs, the shift was empty and the comparison trivial. It now also checks that layoffs happened and that some cell's shift exceeds its June target, so the clamp is exercised. Cost if wrong: none.
+- **Task 11.** `scripts/phase1d2_results.py` gained `--persons`, used only for a 2,000-person smoke run before the tier S runs. Cost if wrong: none; the results use tier S's defaults.
+
+## Findings
+
+- **Watchers miss life-course events on the 1st of a month.** This is pre-existing and out of scope. `World._day` keeps one frame per table name for watchers, so the `dbt` module's `life_events` frame replaces the life course's. A watched person who retired on 1 May 2025 got no event in the callback (a probe at 2,000 persons from 28 April). Intervention events are likewise not passed to watchers. It is left for a follow-up.
+- **A checkpoint save costs about 0.73 s at tier S, against the spec's estimate of under 0.2 s.**
+  - 0.58 s is the flush a save makes first, which rebuilds the accounts, instruments and bank-customer tables and writes the manifest.
+  - 0.06 s is the pickle.
+  - That is about 11% of a month's simulation.
+- **Two tests pass by design before their feature exists.** They assert that nothing changes:
+  - `test_expense_shock_at_rate_zero_changes_nothing`;
+  - `test_override_of_a_build_only_parameter_has_no_effect`, for its data files.
+
+  They guard the baseline's draws once the feature exists.
+- **Fast suite time.** It went from 98 s to 174 s across the branch, mostly from the new tests. The 12 checkpoint tests alone take about 20 s.
