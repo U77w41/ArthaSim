@@ -57,8 +57,9 @@ def run_day(world: "World", day: dt.date) -> tuple[pl.DataFrame, pl.DataFrame, p
     state, params, seed, counters = world.state, world.params, world.seed, world.counters
     book = state.book
     if day.day == 1 or world.days_simulated == 0:
-        for module in world.modules:
+        for module in list(world.modules):
             module.monthly(world, day)
+            world.active.after_module(world, module.name, day)
     intents = Intents.concat([_as_intents(m.intents(world, day)) for m in world.modules]).sorted()
     intents.validate()
 

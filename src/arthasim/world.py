@@ -18,6 +18,7 @@ from arthasim.build.world import EntityKind, WorldState, build_state
 from arthasim.config import Config
 from arthasim.engine.rng import KeyedSeed, Seed
 from arthasim.engine.scheduler import Counters, run_day
+from arthasim.interventions import Intervention, SetHook
 from arthasim.modules.allowance import Allowance
 from arthasim.modules.base import BehaviourModule
 from arthasim.modules.budget import Budget
@@ -30,10 +31,12 @@ from arthasim.modules.spending import Consumption
 from arthasim.modules.spike import SpikeConsumption, SpikeIncome
 from arthasim.ledger.instruments import InstrumentType as T
 from arthasim.params import ParamRegistry
+from arthasim.scenario import Scenario
 from arthasim import checkpoint as _checkpoint
+from arthasim.active import Active, unapplied
 from arthasim import macro as _macro
 from arthasim.store.hashing import RunningHash
-from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, LOG_SCHEMA, META_TABLES, Store, content_hash, read_table,
+from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, META_TABLES, Store, content_hash, read_table,
                                     table_files, write_atomic)
 
 Date = str | dt.date
@@ -143,6 +146,7 @@ class World:
         self._checkpoints = True                 # keep a checkpoint at every month end
         self._forked_from: dict[str, str] | None = None
         self.checkpoint_seconds = 0.0            # time spent writing monthly checkpoints (not in wall_seconds)
+        self.active = Active()                   # applied interventions and their state
 
     def __getstate__(self) -> dict[str, Any]:
         """What a checkpoint holds: everything but the store, the watchers, the release secret and the keys derived
@@ -244,7 +248,22 @@ class World:
         self._flush()
 
     def _intervention_details(self) -> list[dict[str, Any]]:
-        return []
+        return self.active.details()
+
+    def apply(self, intervention: Intervention) -> None:
+        """Register an intervention. Its effective date must not be before `world.date`; every check that can fail
+        fails here, before any day runs."""
+        self.active.apply(self, intervention)
+
+    def set_hook(self, kind: str, impl: Any, bank: str | None = None) -> None:
+        """`apply(SetHook(kind, impl, bank, date=world.date))`."""
+        self.apply(SetHook(kind, impl, bank, date=self._date))
+
+    def module(self, name: str) -> BehaviourModule:
+        for m in self.modules:
+            if m.name == name:
+                return m
+        raise KeyError(f"no module {name!r}; modules are {', '.join(m.name for m in self.modules)}")
 
     def set_params(self, params: ParamRegistry) -> None:
         """Replace the registry from now on; the life course's targets follow it."""
@@ -306,9 +325,14 @@ class World:
             self._store.flush()                 # close open files even when a day or a callback raised
         self._flush()
 
-    def run(self, until: Date) -> "Run":
-        """Simulate up to and including `until`."""
+    def run(self, until: Date, scenario: Scenario | None = None) -> "Run":
+        """Simulate up to and including `until`. With a scenario, first apply its interventions, except those
+        matched one for one by an equal intervention already applied (so a scenario passed again, or extended with
+        `add`, applies only what is new)."""
         until = _as_date(until)
+        if scenario is not None:
+            for iv in unapplied(self.active.applied, scenario.interventions):
+                self.apply(iv)
         try:
             while self._date <= until:
                 self._day()
@@ -321,6 +345,7 @@ class World:
         started = time.perf_counter()
         day = self._date
         monthly_ran = day.day == 1 or self._days == 0
+        self.active.start_of_day(self, day)
         reads: set[str] = set()
         params = self.params
         params._reads = reads
@@ -329,14 +354,23 @@ class World:
         finally:
             params._reads = None
         self._params_read |= reads
+        self.active.end_of_day(self, day, reads)
         month = f"{day:%Y-%m}"
         if monthly_ran and self.state.behaviour is not None:
             self._store.add("truth_household_monthly", month, _household_monthly(self.state, month))
         frames: dict[str, pl.DataFrame] = {}
+        # Intervention events follow the life course's (their ids continue its counter); with no life course, last.
+        after = "lifecourse" if any(m.name == "lifecourse" for m in self.modules) else None
         for module in self.modules:
             for name, frame in module.tables().items():
                 self._store.add(name, month, frame)
                 frames[name] = frame
+            if module.name == after:
+                for name, frame in self.active.tables().items():
+                    self._store.add(name, month, frame)
+        if after is None:
+            for name, frame in self.active.tables().items():
+                self._store.add(name, month, frame)
         self._store.add("payments", month, payments)
         self._store.add("journal", month, journal)
         self._store.add("postings", month, postings)
@@ -373,7 +407,7 @@ class World:
             for name, frame in account_frames(self.state, self.config, self.seed).items():
                 self._store.write_dimension(name, frame)
         self._store.write_dimension("macro_paths", _macro.frame(self.params))
-        self._store.write_dimension("interventions_log", pl.DataFrame(schema=LOG_SCHEMA))
+        self._store.write_dimension("interventions_log", self.active.log_frame())
         manifest: dict[str, Any] = {
             "run_id": self.path.name, "seed": self.run_seed, "config_hash": self.config.hash(),
             "release_secret": self.config.release_secret is not None,
@@ -386,6 +420,7 @@ class World:
             "polars_version": pl.__version__,
             "params_read": sorted(self._params_read),
             "forked_from": self._forked_from, "checkpoints": self._checkpoints,
+            "scenario": self.active.details(),
         }
         manifest["builder"] = self.config.builder
         if self.state.population is not None:
