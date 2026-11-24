@@ -91,6 +91,11 @@ class Store:
             if h.month == month:
                 h.close_month()
 
+    def restore(self, hashes: dict[str, RunningHash]) -> None:
+        """Continue from running hashes rebuilt from disk or copied from another store (all months closed)."""
+        self._hash = dict(hashes)
+        self._month = {t: h.month for t, h in hashes.items() if h.month is not None}
+
     def content_hashes(self) -> dict[str, str]:
         """Live content hashes of the fact tables written so far."""
         return {t: h.digest() for t, h in self._hash.items()}

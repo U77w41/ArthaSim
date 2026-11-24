@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import shutil
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -28,7 +29,9 @@ from arthasim.modules.spending import Consumption
 from arthasim.modules.spike import SpikeConsumption, SpikeIncome
 from arthasim.ledger.instruments import InstrumentType as T
 from arthasim.params import ParamRegistry
+from arthasim import checkpoint as _checkpoint
 from arthasim import macro as _macro
+from arthasim.store.hashing import RunningHash
 from arthasim.store.parquet import (DIM_TABLES, FACT_TABLES, LOG_SCHEMA, META_TABLES, Store, content_hash, read_table,
                                     table_files, write_atomic)
 
@@ -136,10 +139,29 @@ class World:
         self._wall = 0.0
         self._watchers: dict[int, list[Callable[[dict], None]]] = {}
         self._params_read: set[str] = set()     # registry ids read on a simulated day
+        self._checkpoints = True                 # keep a checkpoint at every month end
+        self._forked_from: dict[str, str] | None = None
+
+    def __getstate__(self) -> dict[str, Any]:
+        """What a checkpoint holds: everything but the store, the watchers, the release secret and the keys derived
+        from it (the seed is kept as the run seed only)."""
+        state = dict(self.__dict__)
+        state.pop("_store", None)
+        state.pop("_watchers", None)
+        state["seed"] = self.run_seed
+        state["config"] = self.config.model_copy(update={"release_secret": None})
+        return state
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self._store = None
+        self._watchers = {}
 
     @classmethod
-    def build(cls, config: Config, seed: int) -> "World":
-        path = Path(config.out_dir) / f"{config.tier_name}-seed{seed}-{config.hash()[:8]}"
+    def build(cls, config: Config, seed: int, path: str | Path | None = None, checkpoints: bool = True) -> "World":
+        """Build a world. `path` is the run folder (by default `<out_dir>/<tier>-seed<seed>-<config hash[:8]>`);
+        with `checkpoints` the world keeps a checkpoint at every month end in `<run>/checkpoints/<YYYY-MM>/`."""
+        path = Path(path) if path is not None else Path(config.out_dir) / f"{config.tier_name}-seed{seed}-{config.hash()[:8]}"
         if path.exists():
             raise FileExistsError(f"run directory already exists: {path}")
         params = ParamRegistry.load(_registry_path(config), overrides=config.param_overrides)
@@ -148,9 +170,58 @@ class World:
         state = build_state(config, params, draw)
         path.mkdir(parents=True)
         world = cls(config, draw, params, state, path, run_seed=seed)
+        world._checkpoints = bool(checkpoints)
         for name, frame in _dimension_frames(state, config, draw).items():
             world._store.write_dimension(name, frame)
         return world
+
+    @property
+    def label(self) -> str:
+        """The month that has just ended ("YYYY-MM"), or "start" before the first simulated day."""
+        return _checkpoint.label(self)
+
+    def save(self, path: str | Path) -> None:
+        """Write a checkpoint into the new folder `path`. Only at a month end (or before the first day)."""
+        _checkpoint.write(self, Path(path))
+
+    @classmethod
+    def load(cls, path: str | Path, path_out: str | Path | None = None, release_secret: str | None = None,
+             checkpoints: bool = True) -> "World":
+        """Continue a checkpoint in a new run folder: `path_out`, or `<out_dir>/<run_id>-from-<label>` numbered
+        `-2`, `-3`, ... when taken. A checkpoint of a run with a release secret needs the secret again. Loading
+        a pickle runs code: load only checkpoints from your own runs."""
+        world, meta = _checkpoint.read(Path(path), release_secret)
+        if path_out is not None:
+            folder = Path(path_out)
+            if folder.exists():
+                raise FileExistsError(f"run directory already exists: {folder}")
+        else:
+            folder = _checkpoint.next_free(Path(world.config.out_dir) / f"{meta['run_id']}-from-{meta['label']}")
+        _checkpoint.link_tree(Path(path) / "run", folder)
+        try:
+            store = Store(folder)
+            hashes = {t: RunningHash.from_disk(store.spool_dir, t, folder)
+                      for t in FACT_TABLES if table_files(folder, t)}
+            recorded = meta["content_hash"]
+            for t in FACT_TABLES:
+                if (t in recorded) != (t in hashes) or (t in hashes and hashes[t].digest() != recorded[t]):
+                    raise ValueError(f"checkpoint file changed: table {t} no longer matches its recorded hash")
+            store.restore(hashes)
+            world._open(folder, store, checkpoints, {"run_id": meta["run_id"], "month": meta["label"], "how": "load"})
+        except BaseException:
+            shutil.rmtree(folder, ignore_errors=True)
+            raise
+        return world
+
+    def _open(self, path: Path, store: Store, checkpoints: bool, forked_from: dict[str, str]) -> None:
+        """Attach a loaded or forked world to its own folder, and rewrite the files its parent may since have
+        replaced (accounts, instruments, bank customers, metadata and the manifest) from its own state."""
+        self.path, self._store, self._watchers = Path(path), store, {}
+        self._checkpoints, self._forked_from = bool(checkpoints), forked_from
+        self._flush()
+
+    def _intervention_details(self) -> list[dict[str, Any]]:
+        return []
 
     def set_params(self, params: ParamRegistry) -> None:
         """Replace the registry from now on; the life course's targets follow it."""
@@ -287,6 +358,7 @@ class World:
             "content_hash": self._content_hashes(),
             "polars_version": pl.__version__,
             "params_read": sorted(self._params_read),
+            "forked_from": self._forked_from, "checkpoints": self._checkpoints,
         }
         manifest["builder"] = self.config.builder
         if self.state.population is not None:

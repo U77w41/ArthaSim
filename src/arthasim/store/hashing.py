@@ -84,6 +84,29 @@ class RunningHash:
         path.unlink()
         self._spool = None
 
+    @classmethod
+    def from_disk(cls, spool_dir: Path, name: str, run_path: Path) -> "RunningHash":
+        """The running hash of a table's closed months, rebuilt by reading them exactly as `content_hash` does
+        (a SHA-256 state cannot be saved). The result is closed: the next row starts a new month."""
+        out = cls(spool_dir, name)
+        files = fact_files(run_path, name)
+        months = sorted({f.parent.name for f in files})
+        for month in months:
+            parts = [f for f in files if f.parent.name == month]
+            out._h.update(month.encode())
+            out._schema = _feed_month(out._h, parts)
+        if months:
+            out._month = months[-1].split("=", 1)[1]
+        return out
+
+    def clone(self, spool_dir: Path) -> "RunningHash":
+        """A copy of a closed hash that spools into `spool_dir`."""
+        if self._spool is not None:
+            raise ValueError(f"{self._name}: month {self._month} is still open")
+        out = RunningHash(spool_dir, self._name)
+        out._h, out._month, out._schema = self._h.copy(), self._month, self._schema
+        return out
+
     def digest(self) -> str:
         """The hash of everything fed so far; the running state is left as it was."""
         h = self._h.copy()
@@ -119,11 +142,19 @@ def content_hash(path: Path, name: str, fact: bool | None = None) -> str:
     for month in sorted({f.parent.name for f in files}):
         parts = [f for f in files if f.parent.name == month]
         h.update(month.encode())
-        h.update(schema_bytes(pl.scan_parquet(parts[0], hive_partitioning=False).collect_schema()))
-        for seed in (0, 1):
-            for f in parts:
-                pf = pq.ParquetFile(f)
-                for i in range(pf.num_row_groups):
-                    frame = pl.from_arrow(pf.read_row_group(i))
-                    h.update(frame.hash_rows(seed=seed).to_numpy().tobytes())
+        _feed_month(h, parts)
     return h.hexdigest()
+
+
+def _feed_month(h, parts: list[Path]):
+    """One month's schema, then the seed-0 and seed-1 row hashes of its parts, one row group at a time. Returns
+    the month's schema."""
+    schema = pl.scan_parquet(parts[0], hive_partitioning=False).collect_schema()
+    h.update(schema_bytes(schema))
+    for seed in (0, 1):
+        for f in parts:
+            pf = pq.ParquetFile(f)
+            for i in range(pf.num_row_groups):
+                frame = pl.from_arrow(pf.read_row_group(i))
+                h.update(frame.hash_rows(seed=seed).to_numpy().tobytes())
+    return schema
