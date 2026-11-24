@@ -22,6 +22,43 @@ from arthasim.life.state import month_index
 from arthasim.modules.base import BehaviourModule
 
 
+def cell_of(state) -> np.ndarray:
+    """Each person's (district, sex, age group) target cell, as `Targets.counts` numbers them."""
+    p = state.population.persons
+    return ((p.district.astype(np.int64) * 2 + p.sex.astype(np.int64)) * c.N_AGE_GROUPS
+            + c.age_group(p.age)).astype(np.int64)
+
+
+def _employer_entity(state, emp: np.ndarray) -> np.ndarray:
+    ids = state.employer_ids
+    return np.where(emp >= 0, ids[np.maximum(emp, 0)] if len(ids) else -1, -1)
+
+
+def lay_off(world, who: np.ndarray, first: dt.date, log: EventLog) -> None:
+    """Move salaried people to seeking as the life course moves a salaried leaver: employer cleared, income 0,
+    the last stage, income and sector kept (so the return rules apply), a LAID_OFF event, payrolls recomputed."""
+    who = np.asarray(who, dtype=np.int64)
+    if who.size == 0:
+        return
+    s = world.state
+    p, a, life = s.population.persons, s.population.attributes, s.life
+    emp = s.person_employer
+    old_income, old_emp = a.monthly_income_paise[who].copy(), emp[who].copy()
+    life.last_stage[who] = c.SALARIED
+    life.months_since_left[who] = 0
+    life.last_income[who] = old_income
+    life.last_sector[who] = a.sector[who]
+    emp[who] = -1
+    p.life_stage[who] = c.SEEKING
+    a.sector[who] = -1
+    a.monthly_income_paise[who] = 0
+    s.person_salary[who] = 0
+    life.months_in_stage[who] = 1
+    log.add(s.person_ids[who], "LAID_OFF", from_stage=c.SALARIED, to_stage=c.SEEKING,
+            employer_from=_employer_entity(s, old_emp), employer_to=None, income_before=old_income, income_after=0)
+    recompute_payroll(s)
+
+
 class LifeCourse(BehaviourModule):
     name = "lifecourse"
 
@@ -105,6 +142,12 @@ class _Cycle:
                     cell[m], t = T.counts(self.month, d, x, p.age[m])
                     targets += t
         shares = T.for_persons(self.month, p.district, p.sex, p.age)
+        # Layoffs from an income shock hold the cell's salaried target down for the shock's duration.
+        shift = self.world.active.target_shift(self.month, T.n_cells)
+        if shift.any():
+            k = np.minimum(shift, targets[:, c.SALARIED])
+            targets[:, c.SALARIED] -= k
+            targets[:, c.SEEKING] += k
 
         # 3. Transition probabilities.
         stage = p.life_stage.copy()

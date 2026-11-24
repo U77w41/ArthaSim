@@ -15,8 +15,13 @@ import numpy as np
 import polars as pl
 
 from arthasim import macro, where
+from arthasim.build import categories as c
+from arthasim.engine import rng
 from arthasim.interventions import (ChangeRailRule, DBTTransfer, ExpenseShock, IncomeShock, Intervention,
                                     MacroPath, ParamOverride, SetHook, SetPolicyRate)
+from arthasim.life.events import EventLog
+from arthasim.life.jobs import recompute_payroll
+from arthasim.life.state import month_index
 from arthasim.modules.base import BehaviourModule
 from arthasim.store.parquet import LOG_SCHEMA
 
@@ -50,10 +55,37 @@ class _Row:
     done: bool = False             # parameter changes made, swaps made
 
 
+@dataclass
+class _Shift:
+    """Laid-off counts per target cell, held off the cells' salaried targets from month `first` to `last`."""
+    counts: np.ndarray
+    first: int                     # month index
+    last: int | None               # inclusive; None for the rest of the run
+
+
+@dataclass
+class _Cut:
+    """People whose pay an income shock cut, with what must still hold for the cut to be reversed."""
+    rate: float
+    who: np.ndarray
+    stage: np.ndarray
+    entry: np.ndarray              # month index the person entered the stage
+    pay_set: np.ndarray            # `life.pay_set` at the cut
+    restore: int | None            # month index of the restore; None for never
+
+
+def _set_income(state, who: np.ndarray, income: np.ndarray) -> None:
+    """Income, and salary for the salaried (the model keeps the two equal)."""
+    state.population.attributes.monthly_income_paise[who] = income
+    state.person_salary[who] = np.where(state.population.persons.life_stage[who] == c.SALARIED, income, 0)
+
+
 class Active:
     def __init__(self) -> None:
         self.rows: list[_Row] = []
         self._events: list[pl.DataFrame] = []
+        self._shifts: list[_Shift] = []
+        self._cuts: list[_Cut] = []
 
     @property
     def applied(self) -> list[Intervention]:
@@ -128,7 +160,86 @@ class Active:
         world.modules[i] = impl
 
     def after_module(self, world: "World", name: str, day: dt.date) -> None:
-        """Called after each module's monthly hook (Tasks 7 and 8 act here)."""
+        """Called after each module's monthly hook: income shocks act after the life course."""
+        first = day.replace(day=1)
+        if name == "lifecourse":
+            self._income_shocks(world, first)
+
+    def target_shift(self, month: dt.date, n_cells: int) -> np.ndarray:
+        """Per target cell, the people active layoff shocks hold off its salaried target this month."""
+        m = month_index(month)
+        out = np.zeros(n_cells, dtype=np.int64)
+        for sh in self._shifts:
+            if sh.first <= m and (sh.last is None or m <= sh.last):
+                out += sh.counts[:n_cells]
+        return out
+
+    # -- income shocks ------------------------------------------------------------------------------------------
+    def _income_shocks(self, world: "World", first: dt.date) -> None:
+        s = world.state
+        m = month_index(first)
+        log = EventLog()
+        for cut in self._cuts:
+            if cut.restore == m:
+                self._restore(s, cut, m, log)
+        for row in self.rows:
+            if isinstance(row.iv, IncomeShock) and not row.done and row.effective == first:
+                if row.iv.kind == "layoff":
+                    self._layoff(world, row, first, log)
+                else:
+                    self._pay_cut(world, row, first, log)
+                row.done = True
+        if len(log):
+            events = log.frame(first, s.life.next_event_id)
+            s.life.next_event_id += events.height
+            self._events.append(events)
+
+    def _layoff(self, world: "World", row: _Row, first: dt.date, log: EventLog) -> None:
+        from arthasim.modules.lifecourse import cell_of, lay_off
+        s, iv = world.state, row.iv
+        sel = where.select(world, iv.where)
+        sal = sel[s.population.persons.life_stage[sel] == c.SALARIED]
+        u = rng.uniform(world.seed, rng.stream_id(iv.stream()), s.person_ids[sal], first.toordinal())
+        who = sal[u < iv.rate]
+        n_cells = s.life.targets.n_cells
+        counts = np.bincount(cell_of(s)[who], minlength=n_cells).astype(np.int64)
+        lay_off(world, who, first, log)
+        m = month_index(first)
+        if iv.months != 1 and who.size:
+            self._shifts.append(_Shift(counts, m + 1, m + iv.months - 1 if iv.months else None))
+        row.affected = int(who.size)
+        row.extra = {"selected": int(sel.size), "not_salaried": int(sel.size - sal.size)}
+
+    def _pay_cut(self, world: "World", row: _Row, first: dt.date, log: EventLog) -> None:
+        s, iv = world.state, row.iv
+        p, life = s.population.persons, s.life
+        sel = where.select(world, iv.where)
+        who = sel[np.isin(p.life_stage[sel], c.EARNING) & ~life.helper[sel]]
+        before = s.population.attributes.monthly_income_paise[who].astype(np.int64)
+        new = np.where(before > 0, np.maximum(1, np.rint(before * (1 - iv.rate))), 0).astype(np.int64)
+        _set_income(s, who, new)
+        recompute_payroll(s)
+        log.add(s.person_ids[who], "PAY_CUT", income_before=before, income_after=new)
+        m = month_index(first)
+        self._cuts.append(_Cut(float(iv.rate), who, p.life_stage[who].copy(),
+                               (m - life.months_in_stage[who]).astype(np.int64), life.pay_set[who].copy(),
+                               m + iv.months if iv.months else None))
+        row.affected = int(who.size)
+        row.extra = {"selected": int(sel.size), "not_earning": int(sel.size - who.size)}
+
+    @staticmethod
+    def _restore(s, cut: _Cut, m: int, log: EventLog) -> None:
+        """Reverse a cut for those still in the same stage whose pay has not been reset since (raises kept)."""
+        p, life = s.population.persons, s.life
+        who = cut.who
+        keep = ((p.life_stage[who] == cut.stage) & ~life.helper[who] & (life.pay_set[who] == cut.pay_set)
+                & ((m - life.months_in_stage[who]) == cut.entry))
+        back = who[keep]
+        before = s.population.attributes.monthly_income_paise[back].astype(np.int64)
+        new = np.rint(before / (1 - cut.rate)).astype(np.int64)
+        _set_income(s, back, new)
+        recompute_payroll(s)
+        log.add(s.person_ids[back], "PAY_RESTORED", income_before=before, income_after=new)
 
     def end_of_day(self, world: "World", day: dt.date, reads: set[str]) -> None:
         for row in self.rows:
