@@ -231,6 +231,8 @@ def _payments(ctx: Context, where: str, value: str = "count(*)") -> dict[str, fl
 
 
 def _per_adult_month(ctx: Context, where: str) -> dict[str, float]:
+    if not ctx.has_data():
+        return {}
     persons, n = _persons(ctx), len(ctx.month_names)
     count = _payments(ctx, where)
     return {"all": national(ctx, {a: count.get(a, 0.0) / n / persons[a] for a in persons})}
