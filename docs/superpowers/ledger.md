@@ -978,3 +978,11 @@ A fresh Opus reviewer read `29dd4a6..0388a80` in passes, ran the fast suite (508
 - **Seed sensitivity of the gate.** At seed 8 the committed fit fails the same 12 checks (measured after the fixes).
 
 **Deferred.** None of the reviewer's findings is left open.
+
+## Final state (plan 1e, after the review's fixes)
+
+- Fast suite: 526 passed, 9 deselected (234.5 s).
+- Slow gates (`-m slow`): 9 passed, including `tests/test_gate_1e.py` (621.8 s, run after the fast suite).
+- Bench (tier S, 90 days, seed 7): all 20 content hashes equal the reference above, with 15,282,932 payment attempts; apart from timings, memory and the run path, only `checkpoint_mb` differs (170.7 against 170.8).
+- Not merged into `main` and not pushed.
+- Open for the owner: whether to adopt the fitted values as registry defaults (it changes every default run and all 20 bench hashes); the follow-ups named in the 12 gap rulings.
