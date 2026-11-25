@@ -266,6 +266,7 @@ class World:
         replaced (accounts, instruments, bank customers, metadata and the manifest) from its own state."""
         self.path, self._store, self._watchers = Path(path), store, {}
         self._checkpoints, self._forked_from = bool(checkpoints), forked_from
+        self._drop_report()
         self._flush()
 
     def _intervention_details(self) -> list[dict[str, Any]]:
@@ -339,7 +340,15 @@ class World:
             for callback in list(callbacks):
                 callback(payload)
 
+    def _drop_report(self) -> None:
+        """A validation report describes the run as it was; once the world moves on, or continues in a new folder,
+        it describes another run, so it is removed (this folder's link only)."""
+        for name in REPORT_TABLES:
+            (self.path / f"{name}.parquet").unlink(missing_ok=True)
+
     def step(self, days: int = 1) -> None:
+        if days > 0:
+            self._drop_report()
         try:
             for _ in range(days):
                 self._day()
@@ -355,6 +364,8 @@ class World:
         if scenario is not None:
             for iv in self.active.unapplied(scenario.interventions):
                 self.apply(iv)
+        if self._date <= until:
+            self._drop_report()
         try:
             while self._date <= until:
                 self._day()

@@ -142,3 +142,17 @@ def test_a_spike_run_skips_what_it_cannot_check(tmp_path):
     assert set(table.filter(pl.col("check") == "determinism")["status"]) == {"pass"}
     targets = table.filter(pl.col("kind") != "hard")
     assert set(targets["status"]) == {"skipped"} and "population" in targets["detail"][0]
+
+
+def test_a_report_never_outlives_the_run_it_describes(tmp_path):
+    world = World.build(Config.tier("S", persons=400, out_dir=str(tmp_path)), seed=8)
+    run = world.run("2025-06-30")
+    run.validate()
+    assert "validation_report" in Run.open(run.path).tables()
+    fork = world.fork(tmp_path / "fork")
+    assert "validation_report" not in Run.open(fork.path).tables()       # a fork starts without its parent's report
+    assert "validation_report" in Run.open(run.path).tables()            # and leaves the parent's in place
+    world.run("2025-07-05")
+    assert "validation_report" not in Run.open(run.path).tables()        # running on makes the old report stale
+    loaded = Run.open(run.path).fork_at("2025-06-01")
+    assert "validation_report" not in Run.open(loaded.path).tables()

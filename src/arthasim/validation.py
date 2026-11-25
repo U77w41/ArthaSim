@@ -25,6 +25,7 @@ HARD: dict[str, Callable[..., list[dict[str, Any]]]] = {
     "ledger": lambda run, secret: checks.ledger(run),
     "determinism": lambda run, secret: checks.determinism(run, release_secret=secret),
     "identifiers": lambda run, secret: checks.identifiers(run),
+    "registry": lambda run, secret: checks.registry(run),
 }
 SCHEMA = {"suite": pl.String, "check": pl.String, "kind": pl.String, "component": pl.String,
           "target_id": pl.String, "target_status": pl.String, "simulated": pl.Float64, "target": pl.Float64,

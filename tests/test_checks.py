@@ -120,3 +120,49 @@ def test_determinism_skipped_without_the_secret_and_for_a_fork(tmp_path):
     fork = world.fork(tmp_path / "fork")
     rows = checks.determinism(fork.run("2025-05-05"))
     assert {r["status"] for r in rows} == {"skipped"} and "fork" in rows[0]["detail"]
+
+
+def test_ledger_catches_a_missing_month_end_row(tmp_path):
+    path = copy(tmp_path)
+    rewrite(path, "balances_monthly", "2025-04", lambda f: f.filter(pl.col("account_id") != 3))
+    assert status(checks.ledger(Run.open(path)), "stock_flow") == "fail"
+
+
+def test_ledger_reports_an_unknown_account_instead_of_raising(tmp_path):
+    path = copy(tmp_path)
+    rewrite(path, "postings", "2025-04", lambda f: f.with_columns(
+        pl.when(pl.int_range(pl.len()) == 5).then(10**9).otherwise(pl.col("account_id")).alias("account_id")))
+    got = status(checks.ledger(Run.open(path)))
+    assert got["shapes"] == "fail"
+
+
+def test_ledger_checks_postings_of_the_open_month(tmp_path):
+    path = copy(tmp_path)                       # May is the run's last, open month: no month-end balance yet
+    rewrite(path, "postings", "2025-05", lambda f: f.with_columns(
+        pl.when(pl.int_range(pl.len()) == 7).then(pl.col("balance_after_paise") + 1)
+        .otherwise(pl.col("balance_after_paise")).alias("balance_after_paise")))
+    assert status(checks.ledger(Run.open(path)), "stock_flow") == "fail"
+
+
+def test_an_all_digit_account_number_fails_whatever_its_length(tmp_path):
+    path = copy(tmp_path)
+    rewrite(path, "bank_customers", None, lambda f: f.with_columns(
+        pl.when(pl.int_range(pl.len()) == 0).then(pl.lit("1234")).otherwise(pl.col("customer_no")).alias("customer_no")))
+    assert status(checks.identifiers(Run.open(path)), "account_no") == "fail"
+
+
+def test_registry_version_check(tmp_path):
+    assert status(checks.registry(clean()), "version") == "pass"
+    path = copy(tmp_path)
+    manifest = path / "run_manifest.json"
+    manifest.write_text(manifest.read_text().replace(clean().manifest["registry_version"], "0" * 64))
+    row = checks.registry(Run.open(path))[0]
+    assert row["status"] == "fail" and "changed" in row["detail"]
+
+
+def test_determinism_skipped_for_an_intervention_in_the_first_month(tmp_path):
+    from arthasim.interventions import ParamOverride
+    world = World.build(Config.tier("S", persons=300, out_dir=str(tmp_path)), seed=2, checkpoints=False)
+    world.apply(ParamOverride("consumption.spend_share", 0.7, "2025-04-10"))
+    rows = checks.determinism(world.run("2025-05-02"))
+    assert {r["status"] for r in rows} == {"skipped"} and "intervention" in rows[0]["detail"]

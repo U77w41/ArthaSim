@@ -305,24 +305,42 @@ def festival_uplift(ctx: Context) -> dict[str, float]:
     return {"all": per_day["2025-10"] / mean} if mean > 0 else {}
 
 
-def dbt_cashout(ctx: Context) -> dict[str, float]:
-    """For each day an account got an APBS credit, with 30 days of the run after it: the share whose next cash
-    withdrawal from that account came 0-5, 6-15 or 16-30 days later (whole run, not the window)."""
-    frame = ctx.whole(f"""
-        with credit as (select distinct y.payee_account_id as account_id, {_IST_DATE} as day from payments y
-                        where y.status = 'SUCCESS' and y.rail = 'APBS'),
-             draw as (select y.payer_account_id as account_id, {_IST_DATE} as day from payments y
-                      where y.status = 'SUCCESS' and y.purpose = 'CASH_WITHDRAWAL'),
-             last as (select max({_IST_DATE}) as day from payments y)
-        select c.account_id, c.day, min(d.day) as next_draw from credit c
-        left join draw d on d.account_id = c.account_id and d.day >= c.day
-        where c.day + interval 30 day <= (select day from last) group by 1, 2""")
-    if frame.height == 0:
+_DAY_US = 86_400 * 1_000_000
+_IST_US = 330 * 60 * 1_000_000
+
+
+def cashout_bins(credits, draws, last_day: int) -> dict[str, float]:
+    """`credits` and `draws` are (account, settle_ts) pairs in microseconds; `last_day` is a timestamp on the run's
+    last day. For each day an account got a credit (its first credit that day), with 30 days of the run after it:
+    the share whose next withdrawal from the account at or after the credit came 0-5, 6-15 or 16-30 IST days later."""
+    c = pl.DataFrame(list(credits), schema={"account": pl.Int64, "ts": pl.Int64}, orient="row")
+    d = pl.DataFrame(list(draws), schema={"account": pl.Int64, "ts": pl.Int64}, orient="row")
+    if c.height == 0:
         return {}
-    lag = (frame["next_draw"] - frame["day"]).dt.total_days()
-    n = frame.height
+    day = lambda col: (pl.col(col) + _IST_US) // _DAY_US
+    c = (c.with_columns(day("ts").alias("day")).group_by(["account", "day"]).agg(pl.col("ts").min())
+         .filter(pl.col("day") + 30 <= (last_day + _IST_US) // _DAY_US).sort("ts"))
+    if c.height == 0:
+        return {}
+    d = d.with_columns(day("ts").alias("draw_day"), pl.col("ts").alias("draw_ts")).sort("ts")
+    joined = c.join_asof(d.select("account", "ts", "draw_day"), on="ts", by="account", strategy="forward",
+                         check_sortedness=False)                 # both frames are sorted by ts above
+    lag = joined["draw_day"] - joined["day"]
+    n = joined.height
     bins = {"d0_5": (0, 5), "d6_15": (6, 15), "d16_30": (16, 30)}
     return {k: float(((lag >= lo) & (lag <= hi)).sum()) / n for k, (lo, hi) in bins.items()}
+
+
+def dbt_cashout(ctx: Context) -> dict[str, float]:
+    """For each day an account got an APBS credit, with 30 days of the run after it: the share whose next cash
+    withdrawal from that account, at or after the credit, came 0-5, 6-15 or 16-30 days later (whole run)."""
+    credits = ctx.whole("select payee_account_id, settle_ts from payments where status = 'SUCCESS' and rail = 'APBS'")
+    if credits.height == 0:
+        return {}
+    draws = ctx.whole("""select payer_account_id, settle_ts from payments
+                         where status = 'SUCCESS' and purpose = 'CASH_WITHDRAWAL'""")
+    last = int(ctx.whole("select max(settle_ts) as t from payments")["t"][0])
+    return cashout_bins(credits.iter_rows(), draws.iter_rows(), last)
 
 
 STATISTICS: dict[str, Callable[[Context], dict[str, float]]] = {

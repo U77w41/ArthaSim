@@ -54,6 +54,8 @@ def ledger(run: "Run") -> list[dict[str, Any]]:
     book = SimpleNamespace(type=np.array([int(_TYPES[t]) for t in acc["type"].to_list()], dtype=np.int64),
                            holder=acc["holder_entity_id"].to_numpy(), issuer=acc["issuer_entity_id"].to_numpy())
     opening = acc["opening_balance_paise"].to_numpy()
+    opened = acc["opened_on"].to_numpy()
+    n_accounts = len(opening)
     last = opening.copy()
     money = (book.type == T.DEPOSIT) | (book.type == T.CASH)
     banks = pl.read_parquet(path / "banks.parquet")["entity_id"].to_numpy()
@@ -74,11 +76,16 @@ def ledger(run: "Run") -> list[dict[str, Any]]:
     closed = {f.parent.name.split("=", 1)[1] for f in fact_files(path, "balances_monthly")}
     for month in months:
         journal, postings = _month_frame(path, "journal", month), _month_frame(path, "postings", month)
+        a = postings["account_id"].to_numpy()
+        unknown = (a < 0) | (a >= n_accounts)
+        if unknown.any():
+            bad["shapes"].append(f"{month}: a posting names account {int(a[np.argmax(unknown)])}, which the accounts "
+                                 "table does not have")
+            continue
         try:
             _check_shapes(journal, postings, book)
         except InvariantError as e:
             bad["shapes"].append(f"{month}: {e.detail}")
-        a = postings["account_id"].to_numpy()
         after = postings["balance_after_paise"].to_numpy()
         delta = postings["delta_paise"].to_numpy()
         order = np.argsort(a, kind="stable")
@@ -102,6 +109,13 @@ def ledger(run: "Run") -> list[dict[str, Any]]:
             continue
         b = _month_frame(path, "balances_monthly", month)
         ids, balance = b["account_id"].to_numpy(), b["balance_paise"].to_numpy()
+        y, mo = int(month[:4]), int(month[5:])
+        month_end = np.datetime64(dt.date(y, mo, calendar.monthrange(y, mo)[1]), "D")
+        expected = int((opened.astype("datetime64[D]") <= month_end).sum())
+        if ids.size != expected or not np.array_equal(np.sort(ids), np.arange(expected)):
+            bad["stock_flow"].append(f"{month}: month-end balances list {ids.size} accounts where {expected} were "
+                                     "open (each open account needs exactly one row)")
+            continue
         differs = last[ids] != balance
         if differs.any():
             bad["stock_flow"].append(f"{month}: month-end balance of account {int(ids[np.argmax(differs)])} is not "
@@ -223,11 +237,27 @@ def identifiers(run: "Run") -> list[dict[str, Any]]:
               lambda v: bool(fmt["mobile"].match(v))),
         check("ifsc", [("instruments BRANCH", values(instruments, "value", "BRANCH"))],
               lambda v: bool(fmt["ifsc"].match(v))),
+        # Real account numbers are 9 to 18 digits; a synthetic one must not be all digits at any length.
         check("account_no", [("instruments ACCOUNT_NO", values(instruments, "value", "ACCOUNT_NO")),
                              ("bank_customers.customer_no", values(customers, "customer_no"))],
-              lambda v: bool(fmt["account_no"].match(v))),
+              lambda v: v.isdigit()),
         check("card", [("instruments DEBIT_CARD", values(instruments, "value", "DEBIT_CARD"))],
               lambda v: bool(fmt["card"].match(v)) and luhn(v)),
         check("vpa", [("instruments VPA", values(instruments, "value", "VPA"))],
               lambda v: not SYNTHETIC_VPA_HANDLE.match(v.rsplit("@", 1)[-1])),
     ]
+
+
+# Registry -----------------------------------------------------------------------------------------------------------
+
+def registry(run: "Run") -> list[dict[str, Any]]:
+    """Whether the registry the run's config names is still the one the run was made with. If it changed, statistics
+    that read parameters and the published targets come from the current registry, not the run's."""
+    from arthasim.statistics import run_params
+    if "config" not in run.manifest:
+        return [_row("version", None, "the run was made before plan 1e and its manifest has no config")]
+    now, then = run_params(run).version(), run.manifest.get("registry_version")
+    if now == then:
+        return [_row("version", True, f"the run's registry, version {now[:16]}, is unchanged")]
+    return [_row("version", False, f"the registry has changed since the run was made ({str(then)[:16]} then, "
+                                   f"{now[:16]} now): targets and parameter-reading statistics use the current one")]

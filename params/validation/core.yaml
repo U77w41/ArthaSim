@@ -10,6 +10,7 @@ checks:
 - {id: ledger, kind: hard, statistic: ledger, why: "Architecture section 7.3; a stored run must still satisfy every invariant the run checked daily."}
 - {id: determinism, kind: hard, statistic: determinism, why: "Same seed and config give identical output (section 15.3)."}
 - {id: identifiers, kind: hard, statistic: identifiers, why: "No synthetic identifier matches a real format (section 5.3)."}
+- {id: registry, kind: hard, statistic: registry, why: "The registry is the one the run was made with, so targets and parameter-reading statistics describe this run (added after the final review)."}
 
 # Labour stocks -------------------------------------------------------------------------------------------------------
 - id: labour.stages

@@ -174,3 +174,35 @@ def test_missing_group_is_absent_not_nan():
     got = st.STATISTICS["labour.ur.graduate_15_29"](st.context(spring()))
     assert all(np.isfinite(v) for v in got.values())
     assert st.STATISTICS["holdout.festival_uplift"](st.context(spring())) == {}    # no September to November
+
+
+def test_dbt_cashout_counts_only_withdrawals_after_the_credit():
+    run, ctx = autumn(), st.context(autumn())
+    ist = "cast(make_timestamp(settle_ts) + interval 330 minute as date)"
+    q = run.sql(f"""
+        with credit as (select payee_account_id as a, {ist} as day, min(settle_ts) as ts from payments
+                        where status = 'SUCCESS' and rail = 'APBS' group by 1, 2),
+             draw as (select payer_account_id as a, settle_ts as ts, {ist} as day from payments
+                      where status = 'SUCCESS' and purpose = 'CASH_WITHDRAWAL'),
+             last as (select max({ist}) as day from payments)
+        select c.a, c.day, min(d.day) as nxt from credit c left join draw d on d.a = c.a and d.ts >= c.ts
+        where c.day + interval 30 day <= (select day from last) group by 1, 2""")
+    lag = [(n - d).days if n is not None else None for _, d, n in q.iter_rows()]
+    n = len(lag)
+    want = {"d0_5": sum(1 for x in lag if x is not None and 0 <= x <= 5) / n,
+            "d6_15": sum(1 for x in lag if x is not None and 6 <= x <= 15) / n,
+            "d16_30": sum(1 for x in lag if x is not None and 16 <= x <= 30) / n}
+    got = st.STATISTICS["holdout.dbt_cashout"](ctx)
+    assert got == pytest.approx(want)
+
+
+def test_cashout_bins_by_hand():
+    day = lambda d: 1_000_000 * 86_400 * d             # microseconds since 1970 (UTC midnight is 05:30 IST)
+    credits = [(1, day(0) + 5_000_000), (1, day(40) + 0), (2, day(0) + 0), (3, day(0) + 0)]
+    draws = [(1, day(0) + 1_000_000),                  # earlier on the credit's day: not after the credit
+             (1, day(7)),                              # account 1: 7 days after its first credit
+             (2, day(0) + 9_000_000),                  # account 2: same day, after the credit: 0 days
+             (3, day(20))]                             # account 3: 20 days
+    got = st.cashout_bins(credits, draws, last_day=day(45))
+    # the credit on day 40 has no 30 days after it, so three credits count
+    assert got == {"d0_5": pytest.approx(1 / 3), "d6_15": pytest.approx(1 / 3), "d16_30": pytest.approx(1 / 3)}
