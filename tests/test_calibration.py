@@ -1,4 +1,5 @@
 """calibrate (plan 1e): free parameters, scores, the Optuna loop and the result."""
+import polars as pl
 import pytest
 
 from arthasim import Config, calibration
@@ -46,9 +47,9 @@ def _tiny(tmp_path, workers):
 
 
 def test_two_trials_are_the_same_with_one_or_two_workers(tmp_path):
-    one, two = _tiny(tmp_path, 1), _tiny(tmp_path, 2)
-    assert one.best == two.best and one.loss == two.loss
-    assert one.trials.equals(two.trials)
+    one, two, three = _tiny(tmp_path, 1), _tiny(tmp_path, 2), _tiny(tmp_path, 3)      # three workers, two seeds
+    assert one.best == two.best == three.best and one.loss == two.loss == three.loss
+    assert one.trials.equals(two.trials) and one.trials.equals(three.trials)
     assert one.trials.height == 2 and set(one.best) == {"earn.base_paise"}
     assert one.loss == min(one.trials["loss"].to_list())
     assert not list((tmp_path / "w1").rglob("*.parquet"))            # trial runs are removed after scoring
@@ -86,3 +87,25 @@ def test_refine_narrows_known_parameters_and_starts_new_ones_at_their_defaults()
     assert (space[1].low, space[1].high) == (0.3, 1.5) and (space[2].low, space[2].high) == (0.5, 6.0)
     assert start == {"earn.sigma": 0.2133, "earn.return_by_education:scale": 1.0,
                      "consumption.buffer_target_months": 3.0}
+
+
+def test_saved_fit_has_no_machine_path_and_trials_are_logged_as_they_run(tmp_path):
+    config = Config.tier("S", persons=1_000, out_dir=str(tmp_path / "work"))
+    log = tmp_path / "log.parquet"
+    result = calibration.calibrate(config, params=[Free("earn.base_paise", 400_000, 1_400_000, log=True)],
+                                   targets=["pay.regular_monthly"], trials=2, seeds=(1,), months=2, log=log)
+    assert pl.read_parquet(log).equals(result.trials)
+    result.save(tmp_path / "fit.yaml")
+    assert "out_dir" not in result.config and str(tmp_path) not in (tmp_path / "fit.yaml").read_text()
+
+
+def test_near_a_bound_in_the_parameter_s_own_scale():
+    lin, log = Free("x", 0.0, 1.0), Free("y", 1.0, 100.0, log=True)
+    assert calibration.near_bound(lin, 0.96) and not calibration.near_bound(lin, 0.94)
+    assert calibration.near_bound(log, 80.0) and not calibration.near_bound(log, 70.0)   # 10**1.9 is about 79.4
+
+
+def test_free_parameters_of_the_default_space_are_input_placeholders():
+    frees, _ = calibration.load_space()
+    rows = {r["id"]: r for r in P.table().iter_rows(named=True)}
+    assert all(rows[f.id]["role"] == "input" and rows[f.id]["status"] == "assumption" for f in frees)

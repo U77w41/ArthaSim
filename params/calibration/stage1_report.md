@@ -10,18 +10,18 @@ Best loss 1.7 (the mean squared error in tolerances; 1 is every target at its ba
 | :--- | ---: | ---: | :--- | ---: |
 | `earn.base_paise` | 300,000 | 1,500,000 | log | 679,962 |
 | `earn.premium.metro` | 0 | 0.8 | linear | 0.05562 |
-| `earn.sigma` | 0.2 | 0.9 | linear | 0.2133 |
+| `earn.sigma` | 0.2 | 0.9 | linear | 0.2133 (near a bound) |
 | `earn.stage_multiplier:self_employed` | 0.3 | 1.5 | linear | 0.7435 |
 | `earn.stage_multiplier:farm` | 0.2 | 1.2 | linear | 1.109 |
 | `earn.stage_multiplier:casual` | 0.2 | 1.2 | linear | 0.5461 |
 | `consumption.spend_share` | 0.5 | 1 | linear | 0.9 |
 | `consumption.purchases_per_month:scale` | 0.5 | 3 | log | 2.187 |
 | `rail.choice.upi_preference` | 0.3 | 1 | linear | 0.3418 |
-| `attr.digital.upi_threshold` | 0.1 | 0.8 | linear | 0.1117 |
+| `attr.digital.upi_threshold` | 0.1 | 0.8 | linear | 0.1117 (near a bound) |
 | `rail.choice.card_preference` | 0.005 | 0.6 | log | 0.01786 |
 | `spike.cash_withdrawal_paise` | 100,000 | 1,500,000 | log | 709,492 |
-| `open.deposit_months_of_income` | 0.1 | 3 | log | 0.1024 (at a bound) |
-| `consumption.ticket_sigma` | 0.3 | 1.3 | linear | 1.282 |
+| `open.deposit_months_of_income` | 0.1 | 3 | log | 0.1024 (near a bound) |
+| `consumption.ticket_sigma` | 0.3 | 1.3 | linear | 1.282 (near a bound) |
 
 ## Targets (best trial, mean over seeds)
 

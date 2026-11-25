@@ -140,7 +140,6 @@ config:
   - rural_archetype
   localities_per_district: 20
   slots_per_day: 96
-  out_dir: /private/tmp/claude-501/-Users-rbih-uc-projects-ArthaSim--claude-worktrees-zealous-saha-789ebb/d0f4eb68-06aa-41c7-a168-ec42afae7e57/scratchpad/calwork
   params_path: params/registry.yaml
   param_overrides: {}
 seeds:

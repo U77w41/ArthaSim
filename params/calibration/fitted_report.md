@@ -8,7 +8,7 @@ Best loss 0.8771 (the mean squared error in tolerances; 1 is every target at its
 
 | Parameter | Low | High | Scale | Fitted |
 | :--- | ---: | ---: | :--- | ---: |
-| `earn.base_paise` | 453,308 | 1,019,943 | log | 985,804 |
+| `earn.base_paise` | 453,308 | 1,019,943 | log | 985,804 (near a bound) |
 | `earn.premium.metro` | 0 | 0.2556 | linear | 0.1046 |
 | `earn.sigma` | 0.05 | 0.4258 | linear | 0.105 |
 | `earn.stage_multiplier:self_employed` | 0.4435 | 1.043 | linear | 1.007 |
@@ -17,7 +17,7 @@ Best loss 0.8771 (the mean squared error in tolerances; 1 is every target at its
 | `consumption.spend_share` | 0.775 | 1 | linear | 0.9016 |
 | `consumption.purchases_per_month:scale` | 1.458 | 3 | log | 2.454 |
 | `rail.choice.upi_preference` | 0.3 | 0.5168 | linear | 0.4378 |
-| `attr.digital.upi_threshold` | 0.1 | 0.2867 | linear | 0.2795 |
+| `attr.digital.upi_threshold` | 0.1 | 0.2867 | linear | 0.2795 (near a bound) |
 | `rail.choice.card_preference` | 0.01191 | 0.02679 | log | 0.02191 |
 | `spike.cash_withdrawal_paise` | 472,994 | 1,064,237 | log | 722,478 |
 | `open.deposit_months_of_income` | 0.06826 | 0.1536 | log | 0.07912 |

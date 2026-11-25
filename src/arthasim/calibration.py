@@ -80,6 +80,17 @@ def resolve_params(params: Sequence[str | Free] | None, registry: ParamRegistry 
     return out
 
 
+def near_bound(f: Free, value: float, share: float = 0.05) -> bool:
+    """Whether a fitted value lies within `share` of its search range from either bound, measured on the parameter's
+    own scale (log for a log parameter)."""
+    import math
+    if f.log:
+        lo, hi, v = math.log(f.low), math.log(f.high), math.log(value)
+    else:
+        lo, hi, v = f.low, f.high, value
+    return min(v - lo, hi - v) <= share * (hi - lo)
+
+
 def narrow(frees: Sequence[Free], values: Mapping[str, float], width: float) -> list[Free]:
     """Bounds narrowed around fitted values, for a refining second calibration: a log parameter keeps
     [v / (1 + 2 width), v * (1 + 2 width)], a linear one v plus or minus `width` of its range; both clipped to the
@@ -234,7 +245,7 @@ class CalibrationResult:
         for f in self.space:
             name = f["id"] + (f":{f['key']}" if f.get("key") else "") + (":scale" if f.get("scale") else "")
             v = self.free[name]
-            edge = " (at a bound)" if min(abs(v - f["low"]), abs(v - f["high"])) <= 0.01 * (f["high"] - f["low"]) else ""
+            edge = " (near a bound)" if near_bound(Free(**f), v) else ""
             lines.append(f"| `{name}` | {fmt(f['low'])} | {fmt(f['high'])} | {'log' if f.get('log') else 'linear'} | "
                          f"{fmt(v)}{edge} |")
         lines += ["", "## Targets (best trial, mean over seeds)", "",
@@ -258,11 +269,12 @@ def calibrate(config: Config, params: Sequence[str | Free] | None = None, target
               trials: int = 200, seeds: Sequence[int] = (1, 2, 3), months: int = 8, workers: int = 1,
               sampler_seed: int = 0, path: str | Path | None = None,
               progress: Callable[[int, float, float], None] | None = None,
-              start: Mapping[str, float] | None = None) -> CalibrationResult:
+              start: Mapping[str, float] | None = None, log: str | Path | None = None) -> CalibrationResult:
     """Fit free parameters by simulation. Each trial runs `months` months from `config.start` for every seed and
     scores the window's statistics against the target checks (core-suite ids). `progress(trial, loss, best)` is
     called after each trial. `start` (free-parameter name to value) is the first trial's proposal, as when a
-    refining calibration starts from an earlier fit."""
+    refining calibration starts from an earlier fit. With `log`, the trials table so far is rewritten there after
+    every trial, so a long calibration that stops part way keeps what it scored."""
     import optuna
     from optuna.distributions import FloatDistribution
     from arthasim.world import _registry_path
@@ -326,6 +338,8 @@ def calibrate(config: Config, params: Sequence[str | Free] | None = None, target
                     row[f"sim:{c.id}:{comp}"] = mean[c.id].get(comp)
                     row[f"score:{c.id}:{comp}"] = scores[c.id][comp]
             rows.append(row)
+            if log is not None:
+                _write_log(Path(log), rows)
             if best is None or value < best[0]:
                 best = (value, t, {"ov": ov, "free": dict(zip([f.name for f in frees], map(float, values))),
                                    "scores": scores, "mean": mean})
@@ -343,10 +357,18 @@ def calibrate(config: Config, params: Sequence[str | Free] | None = None, target
         best=best[2]["ov"], free=best[2]["free"], loss=best[0], scores=best[2]["scores"],
         simulated=best[2]["mean"], targets=goal, trials=pl.DataFrame(rows),
         registry_version=ParamRegistry.load(_registry_path(config)).version(),
-        config=config.model_dump(mode="json", exclude={"release_secret"}), seeds=seeds, months=months,
+        config=config.model_dump(mode="json", exclude={"release_secret", "out_dir"}), seeds=seeds, months=months,
         sampler_seed=sampler_seed,
         space=[{k: v for k, v in f.__dict__.items() if v is not None and v is not False} for f in frees],
         versions={"optuna": optuna.__version__, "arthasim": arthasim.__version__, "polars": pl.__version__})
+
+
+def _write_log(path: Path, rows: list[dict[str, Any]]) -> None:
+    from arthasim.store.parquet import write_atomic
+    import io
+    buf = io.BytesIO()
+    pl.DataFrame(rows).write_parquet(buf)
+    write_atomic(path, buf.getvalue())
 
 
 def _ensure(folder: str) -> str:

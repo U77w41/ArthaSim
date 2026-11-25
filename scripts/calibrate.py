@@ -47,10 +47,11 @@ def main(argv: list[str] | None = None) -> None:
 
     result = calibrate(config, params=params, trials=args.trials, seeds=tuple(int(s) for s in args.seeds.split(",")),
                        months=args.months, workers=args.workers, sampler_seed=args.sampler_seed, progress=progress,
-                       start=start)
+                       start=start, log=Path(args.out).with_name(f"{Path(args.out).stem}_trials.partial.parquet"))
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     result.save(out)
+    out.with_name(f"{out.stem}_trials.partial.parquet").unlink(missing_ok=True)
     result.report(out.with_name(f"{out.stem}_report.md"))
     print(f"best loss {result.loss:.4g} after {args.trials} trials in {time.perf_counter() - started:.0f}s; "
           f"wrote {out}", file=sys.stderr)
