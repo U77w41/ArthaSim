@@ -84,8 +84,15 @@ class Context:
     def month_names(self) -> list[str]:
         return month_list(self.months)
 
+    def has_data(self, months: tuple[str, str] | None = None) -> bool:
+        """Whether the run has payments in the window (or `months`): a window outside the run has none."""
+        from arthasim.store.parquet import table_files
+        return bool(table_files(Path(self.run.path), "payments", months or self.months))
+
     def sql(self, query: str) -> pl.DataFrame:
-        """A query whose fact tables see only the window's months."""
+        """A query whose fact tables see only the window's months; an empty frame for a window outside the run."""
+        if not self.has_data():
+            return pl.DataFrame()
         return self.run.window(self.months[0] + "-01", self.months[1] + "-01").sql(query)
 
     def whole(self, query: str) -> pl.DataFrame:
@@ -157,6 +164,8 @@ def labour_stages(ctx: Context) -> dict[str, float]:
     states = ctx.sql(f"""select e.month, e.age, e.life_stage, a.sex, a.district_index, a.area
                          from entity_state_monthly e join {_AREA} a using (entity_id)""")
     out: dict[str, float] = {}
+    if states.height == 0:
+        return out
     for (month, district, sex), g in states.group_by(["month", "district_index", "sex"]):
         x = c.SEX.index(sex)
         want = targets.for_persons(dt.date.fromisoformat(month + "-01"), int(district), x,
@@ -191,6 +200,8 @@ def mpce(ctx: Context) -> dict[str, float]:
     """Spending by a household's members over the window, per member per month, averaged over persons (rupees)."""
     h, n = _household_spend(ctx), len(ctx.month_names)
     out = {}
+    if h.height == 0:
+        return out
     for (area,), g in h.group_by(["area"]):
         out[area] = float(g["spend"].sum()) / n / float(g["size"].sum()) / 100
     return out
@@ -198,6 +209,8 @@ def mpce(ctx: Context) -> dict[str, float]:
 
 def consumption_gini(ctx: Context) -> dict[str, float]:
     h, n = _household_spend(ctx), len(ctx.month_names)
+    if h.height == 0:
+        return {}
     return {area: gini((g["spend"] / g["size"] / n).to_numpy(), g["size"].to_numpy())
             for (area,), g in h.group_by(["area"])}
 
@@ -236,6 +249,8 @@ def _upi_value_by_day(ctx: Context, months: list[str]) -> dict[dt.date, float]:
     """National UPI value per adult on each day of `months` (weighted by area)."""
     persons = _persons(ctx)
     u = float(ctx.params.get("population.urban_share"))
+    if not ctx.has_data((months[0], months[-1])):
+        return {}
     frame = ctx.run.window(months[0] + "-01", months[-1] + "-01").sql(f"""
         select {_IST_DATE} as day, coalesce(pa.area, pb.area) as area, sum(y.amount_paise)::double as value
         from payments y {_PAYMENT_AREA}

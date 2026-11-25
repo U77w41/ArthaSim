@@ -206,3 +206,125 @@ def test_cashout_bins_by_hand():
     got = st.cashout_bins(credits, draws, last_day=day(45))
     # the credit on day 40 has no 30 days after it, so three credits count
     assert got == {"d0_5": pytest.approx(1 / 3), "d6_15": pytest.approx(1 / 3), "d16_30": pytest.approx(1 / 3)}
+
+
+# Independent recomputations of the statistics the tests above only range-check ---------------------------------
+
+def _w(area):
+    return URBAN_SHARE if area == "urban" else 1 - URBAN_SHARE
+
+
+def test_unemployment_rates_recomputed():
+    run, ctx = spring(), st.context(spring())
+    w = run.window("2025-05-01", "2025-06-30")
+    for check, extra in (("labour.ur", "true"),
+                         ("labour.ur.educated", "a.education in ('secondary', 'graduate', 'postgraduate')"),
+                         ("labour.ur.graduate_15_29", "a.education = 'graduate' and e.age <= 29")):
+        want = per_area(w.sql(f"""
+            select a.area, sum((e.life_stage = 'seeking')::int)::double / count(*) from entity_state_monthly e
+            join {AREA} a using (entity_id) join persons p using (entity_id)
+            where e.life_stage in ('salaried', 'self_employed', 'gig', 'farm', 'casual', 'seeking') and {extra.replace('a.education', 'p.education')}
+            group by 1"""))
+        got = st.STATISTICS[check](ctx)
+        assert set(got) == set(want) and all(got[a] == pytest.approx(want[a]) for a in want), check
+    want = per_area(w.sql(f"""
+        select a.area, avg((e.life_stage in ('self_employed', 'gig', 'farm'))::int) from entity_state_monthly e
+        join {AREA} a using (entity_id) where e.life_stage in ('salaried', 'self_employed', 'gig', 'farm', 'casual')
+        group by 1"""))
+    got = st.STATISTICS["labour.share.self_employed"](ctx)
+    assert all(got[a] == pytest.approx(want[a]) for a in want)
+
+
+def test_gini_and_food_share_recomputed():
+    run, ctx = spring(), st.context(spring())
+    w = run.window("2025-05-01", "2025-06-30")
+    spend = st._SPEND
+    h = w.sql(f"""
+        with s as (select a.household_id, sum(y.amount_paise) as spend from payments y
+                   join accounts c on c.account_id = y.payer_account_id join {AREA} a on a.entity_id = c.holder_entity_id
+                   where y.status = 'SUCCESS' and y.purpose in {spend} group by 1)
+        select case g.kind when 'metro' then 'urban' else 'rural' end as area, h.adults + h.dependants as size,
+               coalesce(s.spend, 0) as spend
+        from households h join (select distinct district_id, kind from geo) g on g.district_id = h.district
+        left join s using (household_id)""")
+    got = st.STATISTICS["consumption.gini"](ctx)
+    for area in ("urban", "rural"):
+        g = h.filter(h["area"] == area)
+        x = np.repeat((g["spend"] / g["size"]).to_numpy().astype(float), g["size"].to_numpy())   # one value per person
+        mad = np.abs(x[:, None] - x[None, :]).mean() if x.size < 9000 else None
+        if mad is not None:
+            assert got[area] == pytest.approx(mad / (2 * x.mean()), rel=1e-7)
+    food = per_area(w.sql(f"""
+        select a.area, sum(case when y.purpose in ('GROCERY', 'FOOD') then y.amount_paise else 0 end)::double
+                       / sum(y.amount_paise) from payments y
+        join accounts c on c.account_id = y.payer_account_id join {AREA} a on a.entity_id = c.holder_entity_id
+        where y.status = 'SUCCESS' and y.purpose in {spend} group by 1"""))
+    got = st.STATISTICS["consumption.food_share"](ctx)
+    assert all(got[a] == pytest.approx(food[a]) for a in food)
+
+
+def _area_sums(run, where, value="count(*)"):
+    return per_area(run.window("2025-05-01", "2025-06-30").sql(f"""
+        select coalesce(pa.area, pb.area), {value} from payments y
+        left join accounts ca on ca.account_id = y.payer_account_id left join {AREA} pa on pa.entity_id = ca.holder_entity_id
+        left join accounts cb on cb.account_id = y.payee_account_id left join {AREA} pb on pb.entity_id = cb.holder_entity_id
+        where y.status = 'SUCCESS' and {where} and coalesce(pa.area, pb.area) is not null group by 1"""))
+
+
+def test_tickets_and_small_shares_recomputed():
+    run, ctx = spring(), st.context(spring())
+    persons = per_area(run.sql(f"select area, count(*) from {AREA} group by 1"))
+    ratio = lambda num, den: (sum(_w(a) * float(num.get(a, 0)) / persons[a] for a in persons)
+                              / sum(_w(a) * float(den.get(a, 0)) / persons[a] for a in persons))
+    atm = "y.rail = 'ATM' and y.purpose = 'CASH_WITHDRAWAL'"
+    assert st.STATISTICS["payments.atm_ticket"](ctx)["all"] == pytest.approx(
+        ratio(_area_sums(run, atm, "sum(y.amount_paise) / 100.0"), _area_sums(run, atm)))
+    card = "y.rail = 'DEBIT_CARD'"
+    assert st.STATISTICS["payments.debit_card_ticket"](ctx)["all"] == pytest.approx(
+        ratio(_area_sums(run, card, "sum(y.amount_paise) / 100.0"), _area_sums(run, card)))
+    for check, rail in (("payments.p2m_under_500", "UPI_P2M"), ("payments.p2p_under_500", "UPI_P2P")):
+        assert st.STATISTICS[check](ctx)["all"] == pytest.approx(
+            ratio(_area_sums(run, f"y.rail = '{rail}' and y.amount_paise < 50000"), _area_sums(run, f"y.rail = '{rail}'")))
+
+
+def test_month_start_spike_recomputed():
+    run, ctx = spring(), st.context(spring())
+    persons = per_area(run.sql(f"select area, count(*) from {AREA} group by 1"))
+    q = run.window("2025-05-01", "2025-06-30").sql(f"""
+        select cast(make_timestamp(y.settle_ts) + interval 330 minute as date) as day, coalesce(pa.area, pb.area),
+               sum(y.amount_paise) from payments y
+        left join accounts ca on ca.account_id = y.payer_account_id left join {AREA} pa on pa.entity_id = ca.holder_entity_id
+        left join accounts cb on cb.account_id = y.payee_account_id left join {AREA} pb on pb.entity_id = cb.holder_entity_id
+        where y.status = 'SUCCESS' and y.rail in ('UPI_P2M', 'UPI_P2P') and coalesce(pa.area, pb.area) is not null
+        group by 1, 2""")
+    value = {}
+    for day, area, v in q.iter_rows():
+        value[day] = value.get(day, 0.0) + _w(area) * float(v) / persons[area]
+    ratios = []
+    for month in (5, 6):
+        early = sum(value.get(dt.date(2025, month, d), 0.0) for d in (1, 2, 3)) / 3
+        mid = sum(value.get(dt.date(2025, month, d), 0.0) for d in range(10, 26)) / 16
+        ratios.append(early / mid)
+    assert st.STATISTICS["payments.month_start_spike"](ctx)["all"] == pytest.approx(sum(ratios) / 2)
+
+
+def test_inoperative_recomputed():
+    run, ctx = spring(), st.context(spring())
+    persons = per_area(run.sql(f"select area, count(*) from {AREA} group by 1"))
+    q = run.window("2025-05-01", "2025-06-30").sql(f"""
+        with used as (select payer_account_id as id from payments where status = 'SUCCESS'
+                      union select payee_account_id from payments where status = 'SUCCESS' and purpose = 'CASH_DEPOSIT')
+        select a.area, count(*), sum((c.account_id not in (select id from used))::int)
+        from accounts c join {AREA} a on a.entity_id = c.holder_entity_id
+        where c.subtype = 'basic' and c.opened_on < date '2025-05-01' group by 1""")
+    rows = {r[0]: (float(r[1]), float(r[2])) for r in q.iter_rows()}
+    num = sum(_w(a) * rows[a][1] / persons[a] for a in rows)
+    den = sum(_w(a) * rows[a][0] / persons[a] for a in rows)
+    assert st.STATISTICS["accounts.inoperative"](ctx)["all"] == pytest.approx(num / den)
+
+
+def test_a_window_with_no_rows_gives_no_components():
+    ctx = st.context(spring(), ("2026-01", "2026-01"))         # no state, payments or balances in that month
+    for check, fn in st.STATISTICS.items():
+        if check != "holdout.dbt_cashout":                       # reads the whole run, not the window
+            assert fn(ctx) == {}, check
