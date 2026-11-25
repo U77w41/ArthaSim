@@ -820,6 +820,20 @@ Run on an Apple M5 with Python 3.12 (numpy 2.5.5, numba 0.68.1, polars 2.1.0, du
 
 The project owner handed every decision to this session: decide, ground decisions in open data, and record each as a ruling. Source research was done by eight research subagents (WebSearch and WebFetch), and two sources the fetch tool could not read (PIB release 2257087, and NPCI's daily UPI statistics for May to November 2025) were read in the built-in browser.
 
+## Tasks
+
+| Task | Commits | Tests |
+| :--- | :--- | :--- |
+| 1. Registry rows and source notes | `a56b4dc` | 6 new; fast suite 470 passed and 1 failed (a DBT row-count pin, fixed in the same commit) |
+| 2. Manifest config, `validation_report` table | `241cbc9` | 2 new |
+| 3. Statistics | `f18547e` | 11 new |
+| 4. Hard checks | `b167f07` | 9 new |
+| 5. Suite and `run.validate` | `0291936`, fix `a30d816` (spike runs) | 10 new |
+| 6. `calibrate` | `46af518`, `d4c3812`, `8fffa1d` (refinement) | 7 new |
+| 7. Scripts, the two-stage calibration | `f2edd5a`, `8fffa1d`, `e826d3a` | stage 1: 400 trials, 5,588 s; stage 2: 200 trials, 2,939 s |
+| 8. Gate | `e826d3a` | first run red (no gaps listed), then green in 128 s |
+| 9. Bench, results, ledger | this commit | see below |
+
 ## Reference hashes (before any change)
 
 `scripts/bench.py --tier S --days 90 --seed 7` on `main` at `29dd4a6`: 15,282,932 payment attempts, content hashes:
@@ -880,7 +894,13 @@ Each gives the ruling, its grounds, then what it costs if wrong. The spec marks 
 - Ruling: Optuna's TPE sampler (Optuna 5.1, `multivariate=True`, 20 random start trials), asked one trial at a time, with each trial's seeds in parallel; Optuna becomes a dependency. Cost if wrong: a different Optuna version proposes other values; the fitted file records the version.
 - Ruling: trials run eight months (April to November) and score May to November, not section 15.2's three months. Measured: in a 10,000-person world, basic accounts' mean balance rose from ₹5,975 in May to ₹9,145 in August, and monthly spending rose 20% from May to November; a three-month fit would score levels the gate's window does not have. Cost if wrong: trials take about 2.5 times as long.
 - Ruling: the fitted set is a committed overrides file (`params/calibration/fitted.yaml`), applied with `CalibrationResult.load(path).apply(config)`; the registry defaults do not change. Cost if wrong: default runs stay uncalibrated until the owner adopts the fitted values as defaults (a follow-up).
-- Ruling: the committed calibration runs 400 trials rather than the signature's 200, for 14 free parameters. Cost if wrong: an hour of compute.
+- Ruling: the committed calibration runs 400 trials rather than the signature's 200, for 14 free parameters. Cost if wrong: an hour of compute (it took 93 minutes: later trials, with more purchases a month, run slower).
+- Ruling: a second, refining stage. The first search (`params/calibration/stage1.*`, best loss 1.70 at trial 400) left `earn.sigma` at 0.213 against its 0.2 floor and `open.deposit_months_of_income` at 0.102 against 0.1, with the consumption Gini (0.309 and 0.374 against 0.237 and 0.284, +2.4 and +3.0 tolerances) and the basic-account balance (₹6,339 against ₹4,808, +1.3) above their bands. Under the known-gaps rule a fitted miss is first searched harder, so the floors went to 0.05 and 0.02, the returns to education (scaled) and `consumption.buffer_target_months` joined the space, and 200 more trials (sampler seed 1) searched bounds narrowed around the first fit (`calibration.refine`, width 0.25), starting from it. The committed `params/calibration/fitted.yaml` is that second stage. Cost if wrong: the second stage explores a smaller region than a fresh 16-parameter search would.
+- Ruling: `calibration.refine` and its test were written together, so the test was not seen red. Cost if wrong: a refine bug a red run would have shown; the test pins every value it returns.
+
+## Findings so far
+
+- **A calibration replays exactly.** The second stage's first trial, stage 1's best proposal run again in fresh worker processes, scored 1.70, the same loss as in stage 1.
 
 **Process**
 - Ruling: the spec's predicted gaps were written before the gate's first run (from the code and the uncalibrated bench run): the month-start spike, zero-balance accounts, unemployment by education and of young graduates, UPI P2P volume, the festival holdout, the debit card ticket and P2P tickets under ₹500. The results compare them with the gate. `accounts.inoperative` was first on the list and was taken off before the gate's first run: the uncalibrated bench run showed 28% of basic accounts idle in a single month, which contradicts the stated reason (that every holder transacts every month). Cost if wrong: none.
@@ -893,3 +913,28 @@ Each gives the ruling, its grounds, then what it costs if wrong. The spec marks 
 ## Slow gates (before the plan 1e gate)
 
 The 8 existing slow gates pass on the branch (391.9 s, run beside the calibration).
+
+## The gate's first run against the predictions
+
+The gate first ran with no `gap:` entries and failed, listing the failing checks. The calibrated tier S run (seed 7, April to November) failed 12 checks:
+- the 8 predicted before the run, all of them: `labour.ur.educated`, `labour.ur.graduate_15_29`, `payments.upi_p2p_per_adult`, `payments.debit_card_ticket`, `payments.p2p_under_500`, `payments.month_start_spike`, `accounts.zero_balance`, `holdout.festival_uplift`;
+- 2 fitted checks that both calibration stages missed at 10,000 persons too: `consumption.gini` and `payments.p2m_under_500`;
+- `accounts.inoperative` (13.0% against 26.4%), taken off the predicted list before the run;
+- `holdout.dbt_cashout`, by 0.2 points in its 6–15 day window (0.152 against a band from 0.154).
+
+Ruling: each of the 12 is listed with `gap:` and its ruling in `params/validation/core.yaml`. The two calibration findings were searched twice (600 trials) before listing, as the known-gaps rule requires. A holdout is never fitted, so a holdout failure is listed as a finding, not searched away. No tolerance changed. Cost if wrong: a check listed as a gap that a better model or search would pass; the gate fails as soon as one passes, so the list cannot go stale silently.
+
+A stage 1 preview (tier S, same seed, before stage 2 existed) passed `payments.month_start_spike` (1.22) and `holdout.dbt_cashout`; stage 2's fit moved both just outside their bands. The month-start rise in the simulation comes from household allowances paid at the turn of the month (allowance value on the 1st to 3rd is 1.79 times that on the 10th to 25th), not from pay.
+
+## Findings
+
+- **Calibration halves pay and consumption and cuts card and ATM use.** With registry defaults the tier S run pays regular workers ₹32,823 (rural) and ₹58,995 (urban) a month against PLFS's ₹17,841 and ₹26,247, and MPCE is ₹6,284 and ₹16,096 against ₹4,314 and ₹7,346 (uprated HCES). The fit brings all six pay components and both MPCE components inside their bands.
+- **The fitted world makes 2.1 times as many payment attempts** (86.8 million against 41.4 million, April to November): purchases a month are scaled by 2.45 to reach 12 UPI P2M payments per adult a month. It simulates in 58 s against 31 s.
+- **The model is not stationary over the window.** On the calibrated run the basic-account mean balance goes from ₹2,962 in May to ₹8,868 in November and MPCE rises about a third, while pay is flat. The seven-month mean passes; single months do not. Households open with 0.08 months of income in the bank and save toward a buffer of 3.27 months.
+- **A calibration replays exactly** (above, "Findings so far").
+- **The festival ratio is below 1 in the simulation** (0.963): monthly spending does not depend on the month's length, so a 31-day month's value per day is about 30/31 of a 30-day month's.
+
+## Final state (before review)
+
+- Fast suite: 508 passed, 9 deselected (119.5 s). Slow gates: 9 (8 earlier and `test_gate_1e`), run below.
+- Not done: the fitted values are not registry defaults (a decision for the owner); the 12 gaps need model work (follow-ups listed in their rulings).
