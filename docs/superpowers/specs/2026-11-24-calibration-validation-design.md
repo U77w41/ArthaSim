@@ -210,7 +210,7 @@ Fitted checks: `pay.regular_monthly`, `pay.casual_daily`, `pay.self_employed_mon
 
 **Two stages (decided during the build).** The first search (400 trials, 14 parameters) ended with `earn.sigma` and `open.deposit_months_of_income` within 7% and 3% of their lower bounds, and with the consumption Gini (+2.4 and +3.0 tolerances) and the basic-account balance (+1.3) still above their bands. As the known-gaps rule allows, the search was widened rather than the checks excused: both floors were lowered, the returns to education (as a scale) and the buffer target were added, and a second search of 200 trials ran inside bounds narrowed around the first fit (`calibration.refine`, width 0.25), starting from it, so it cannot end worse. The first search's files are kept as `params/calibration/stage1.*`.
 
-**Decided.** The committed calibration runs 400 trials, not the signature's default of 200: TPE needs more trials as dimensions grow. At about 10 s a trial with three workers (8-month runs), 400 trials take a little over an hour. The first 20 trials are random (`n_startup_trials=20`), and the sampler is multivariate. Cost if wrong: a fit that a longer search would improve; the trials table shows whether the loss was still falling.
+**Decided.** Stage 1 ran 400 trials, not the signature's default of 200: TPE needs more trials as dimensions grow. At 10 to 15 s a trial with three workers (8-month runs), 400 trials took 93 minutes. The committed fit is stage 2's (200 trials, below). The first 20 trials are random (`n_startup_trials=20`), and the sampler is multivariate. Cost if wrong: a fit that a longer search would improve; the trials table shows whether the loss was still falling.
 
 ## Validation
 
@@ -283,6 +283,8 @@ What may be a gap, and what may not:
   - `payments.debit_card_ticket`: the rail choice (`modules/spending.py`, `choose_rail`) does not depend on the amount, so cards carry ordinary tickets (₹316 on the uncalibrated bench run, against about ₹3,300).
   - `payments.p2p_under_500`: the same P2P flows are mostly allowances and earnings, which are large (7% under ₹500 on the bench run, against 59%).
   The gate's first run is compared with this list in the results. The list comes from the code and from the uncalibrated bench run, before any calibrated run.
+- **A holdout that fails** is recorded as a finding with a ruling, whether a missing mechanism or the fit moved it out of its band; the ruling names what would close it. A holdout is never searched for (added after the final review, which found the first rule silent on a holdout the fit moved).
+- **An exact list makes a check near its band's edge sensitive to unrelated changes:** a change that moves it across the edge fails the gate until the list is updated. That is intended; the update is a ruling.
 - **The gate must end green.** A red gate is not an end state. The phase 1 exit criterion ("acceptance checks pass at tier S") is met only for the checks that pass; the results doc states plainly that each listed gap leaves it unmet.
 
 **Decided.** A gate that ignored failures would hide them; a gate that required them to pass would require new behaviour this plan does not build. Listing them in the suite, where the report shows them, keeps the failure visible and the gate honest. Cost if wrong: none to the record; the list must be updated when a gap closes, which the gate enforces.
