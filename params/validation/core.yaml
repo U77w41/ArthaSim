@@ -29,12 +29,14 @@ checks:
   compare: absolute
   tolerance: 0.02
   why: "Smaller groups than the overall rate."
+  gap: "Ruling (plan 1e): life stages carry no education gradient beyond the build's priors, so unemployment among people with secondary education or more stays near the overall rate (rural 2.7%, urban 5.1% against 6.0% and 7.2%). Predicted before the gate's first run. Follow-up: align unemployment by education (PLFS Table 24)."
 - id: labour.ur.graduate_15_29
   kind: target
   target: labour.ur.graduate_15_29
   compare: absolute
   tolerance: 0.03
   why: "Small group; simulated ages 18-29 against PLFS's 15-29."
+  gap: "Ruling (plan 1e): as for labour.ur.educated; young graduates are unemployed at 8.2% and 12.7% against 21.5% and 23.2%. Predicted before the gate's first run."
 - id: labour.share.regular_salaried
   kind: target
   target: labour.share.regular_salaried
@@ -79,6 +81,7 @@ checks:
   compare: absolute
   tolerance: 0.03
   why: "Fitted; one survey year against a few simulated months."
+  gap: "Ruling (plan 1e): calibration finding. Two searches (600 trials) did not bring consumption inequality into the band: 0.280 and 0.335 at 10,000 persons with pay dispersion (earn.sigma 0.105) and the returns to education (scaled by 0.38) fitted low. Follow-up: find what else spreads consumption (household composition, the consumption floor, households without earners)."
 - id: consumption.food_share
   kind: target
   target: consumption.food_share
@@ -99,6 +102,7 @@ checks:
   compare: relative
   tolerance: 0.25
   why: "As for P2M."
+  gap: "Ruling (plan 1e): the model's P2P flows are allowances, remittances and some earnings; the informal person-to-person payments behind most real P2P volume are not modelled. Predicted before the gate's first run."
 - id: payments.debit_card_per_adult
   kind: target
   target: cards.debit.volume_monthly
@@ -123,24 +127,28 @@ checks:
   compare: relative
   tolerance: 0.25
   why: "Not fitted."
+  gap: "Ruling (plan 1e): the rail choice does not depend on the amount (choose_rail in modules/spending.py), so debit cards carry ordinary small purchases. Predicted before the gate's first run."
 - id: payments.p2m_under_500
   kind: target
   target: upi.p2m.share_under_500
   compare: absolute
   tolerance: 0.05
   why: "Fitted through ticket dispersion."
+  gap: "Ruling (plan 1e): calibration finding. Reaching the UPI P2M count takes many purchases a month, which makes tickets small, and the rail choice does not depend on the amount; the best fitted value was 0.969 against 0.86 at 10,000 persons."
 - id: payments.p2p_under_500
   kind: target
   target: upi.p2p.share_under_500
   compare: absolute
   tolerance: 0.05
   why: "Not fitted."
+  gap: "Ruling (plan 1e): simulated P2P payments are mostly allowances and earnings, which are large. Predicted before the gate's first run."
 - id: payments.month_start_spike
   kind: target
   target: upi.month_start_spike
   compare: absolute
   tolerance: 0.10
   why: "Stands for section 15.3's salary-day inflow spike. The five months May-September 2025 range from 1.26 to 1.36."
+  gap: "Ruling (plan 1e): employer paydays are drawn uniformly over days 1-28 (build/pipeline.py), so salaries cause no month-start rise; the simulated rise (1.166) comes from household allowances paid at the turn of the month. Predicted before the gate's first run. Follow-up: paydays at the turn of the month (Code on Wages, 2019, s.17)."
 
 # Balances and accounts -----------------------------------------------------------------------------------------------
 - id: balances.basic_mean
@@ -155,12 +163,14 @@ checks:
   compare: absolute
   tolerance: 0.03
   why: "Counts are exact; the model's accounts are newer."
+  gap: "Ruling (plan 1e): every account opens with a deposit or a DBT credit, and automatic withdrawals leave the part below a whole note, so almost no account sits at zero (0.4% against 9.15%). Predicted before the gate's first run."
 - id: accounts.inoperative
   kind: target
   target: inclusion.pmjdy.operative_share
   compare: absolute
   tolerance: 0.05
   why: "Compared with 1 - operative share. The real rule needs two years without a transaction; the window is months, so the simulated share is an upper bound on the two-year share."
+  gap: "Ruling (plan 1e): no account is left unused. Over May to November 13.0% of basic accounts had no transaction their holder made, against PMJDY's 26.4% inoperative for two years; the model has no accounts that are opened and then never used. Not predicted: it was taken off the predicted list before the gate's first run."
 
 # Holdouts (checked after calibration, never fitted) ------------------------------------------------------------------
 - id: holdout.festival_uplift
@@ -169,9 +179,11 @@ checks:
   compare: absolute
   tolerance: 0.015
   why: "Half the measured uplift (1.031), so a model with no festival effect fails and one with the right effect passes."
+  gap: "Ruling (plan 1e): the model has no festival behaviour. Its monthly spending does not depend on the month's length, so October's UPI value per day is about 30/31 of its neighbours' (0.963); October's total is 0.998 of the mean of September's and November's. Predicted before the gate's first run."
 - id: holdout.dbt_cashout
   kind: holdout
   target: dbt.cashout_lag
   compare: absolute
   tolerance: 0.08
   why: "One study of poor women in two Madhya Pradesh districts in 2018-19, the only measured lag found."
+  gap: "Ruling (plan 1e): holdout finding (never fitted). The next cash withdrawal falls 6-15 days after a DBT credit 15.2% of the time against the band's 15.4% to 31.4%; the 0-5 day (24.2%) and 16-30 day (16.5%) shares are inside their bands."

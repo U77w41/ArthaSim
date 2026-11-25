@@ -1,0 +1,225 @@
+best:
+  earn.base_paise: 985804
+  earn.premium.metro: 0.10458603009997404
+  earn.sigma: 0.10498527691611068
+  earn.stage_multiplier:
+    salaried: 1.0
+    self_employed: 1.006735369117101
+    gig: 0.6
+    farm: 0.8988371920312356
+    casual: 0.5246772606195457
+  consumption.spend_share: 0.9015997229393468
+  consumption.purchases_per_month:
+  - 29.447469396141443
+  - 19.631646264094297
+  - 7.361867349035361
+  - 3.6809336745176804
+  - 1.7177690481082508
+  - 0.36809336745176807
+  - 24.53955783011787
+  - 4.907911566023574
+  - 7.361867349035361
+  rail.choice.upi_preference: 0.4377952227860457
+  attr.digital.upi_threshold: 0.2795114168109173
+  rail.choice.card_preference: 0.021913127246663205
+  spike.cash_withdrawal_paise: 722478
+  open.deposit_months_of_income: 0.07912123197909707
+  consumption.ticket_sigma: 1.2769771354441184
+  earn.return_by_education:
+  - 0.0
+  - 0.05753017663186373
+  - 0.1725905298955912
+  - 0.36435778533513696
+  - 0.49859486414281906
+  consumption.buffer_target_months: 3.2685930557979277
+free:
+  earn.base_paise: 985804.1789728334
+  earn.premium.metro: 0.10458603009997404
+  earn.sigma: 0.10498527691611068
+  earn.stage_multiplier:self_employed: 1.006735369117101
+  earn.stage_multiplier:farm: 0.8988371920312356
+  earn.stage_multiplier:casual: 0.5246772606195457
+  consumption.spend_share: 0.9015997229393468
+  consumption.purchases_per_month:scale: 2.453955783011787
+  rail.choice.upi_preference: 0.4377952227860457
+  attr.digital.upi_threshold: 0.2795114168109173
+  rail.choice.card_preference: 0.021913127246663205
+  spike.cash_withdrawal_paise: 722477.7282668967
+  open.deposit_months_of_income: 0.07912123197909707
+  consumption.ticket_sigma: 1.2769771354441184
+  earn.return_by_education:scale: 0.3835345108790916
+  consumption.buffer_target_months: 3.2685930557979277
+loss: 0.877089126343513
+scores:
+  pay.regular_monthly:
+    rural: 0.3352068360488114
+    urban: -0.6559943001602664
+  pay.casual_daily:
+    rural: -0.46232938705466187
+    urban: 0.04063153028361244
+  pay.self_employed_monthly:
+    rural: 0.588817304960941
+    urban: -0.5269043337953291
+  consumption.mpce:
+    rural: 0.34140006748842433
+    urban: -0.8500756864047299
+  consumption.gini:
+    rural: 1.4342542061381303
+    urban: 1.7077990117258357
+  payments.upi_p2m_per_adult:
+    all: 0.30500698587433384
+  payments.debit_card_per_adult:
+    all: 0.907938642928726
+  payments.atm_per_adult:
+    all: -0.23865586824652496
+  payments.atm_ticket:
+    all: 0.6617218400215952
+  payments.p2m_under_500:
+    all: 2.1881858809988275
+  balances.basic_mean:
+    all: 0.7986134980051265
+simulated:
+  pay.regular_monthly:
+    rural: 18439.042516194684
+    urban: 24525.211760369348
+  pay.casual_daily:
+    rural: 412.98113754053315
+    urban: 551.2306710125704
+  pay.self_employed_monthly:
+    rural: 13349.364959397635
+    urban: 21193.231620605282
+  consumption.mpce:
+    rural: 4461.794370353863
+    urban: 6721.991530985792
+  consumption.gini:
+    rural: 0.2800276261841439
+    urban: 0.33523397035177505
+  payments.upi_p2m_per_adult:
+    all: 13.093289523809522
+  payments.debit_card_per_adult:
+    all: 0.13168
+  payments.atm_per_adult:
+    all: 0.41479333333333335
+  payments.atm_ticket:
+    all: 5985.188376159825
+  payments.p2m_under_500:
+    all: 0.9694092940499414
+  balances.basic_mean:
+    all: 5767.933424602162
+targets:
+  pay.regular_monthly:
+    rural: 17841.0
+    urban: 26247.0
+  pay.casual_daily:
+    rural: 433.0
+    urban: 549.0
+  pay.self_employed_monthly:
+    rural: 12266.0
+    urban: 23012.0
+  consumption.mpce:
+    rural: 4314.4974
+    urban: 7346.4996
+  consumption.gini:
+    rural: 0.237
+    urban: 0.284
+  payments.upi_p2m_per_adult:
+    all: 12.16563835252436
+  payments.debit_card_per_adult:
+    all: 0.10732000506136911
+  payments.atm_per_adult:
+    all: 0.4411118140790417
+  payments.atm_ticket:
+    all: 5285.660921958148
+  payments.p2m_under_500:
+    all: 0.86
+  balances.basic_mean:
+    all: 4808.0
+registry_version: a58228ef557dedb87b486e62cef979f544051ac91b4299f26845b70002eb0767
+config:
+  tier_name: S
+  start: '2025-04-01'
+  persons: 10000
+  employers: null
+  merchants: null
+  banks: 12
+  nbfcs: 2
+  builder: population
+  districts:
+  - metro_archetype
+  - rural_archetype
+  localities_per_district: 20
+  slots_per_day: 96
+  out_dir: /private/tmp/claude-501/-Users-rbih-uc-projects-ArthaSim--claude-worktrees-zealous-saha-789ebb/d0f4eb68-06aa-41c7-a168-ec42afae7e57/scratchpad/calwork
+  params_path: params/registry.yaml
+  param_overrides: {}
+seeds:
+- 1
+- 2
+- 3
+months: 8
+sampler_seed: 1
+space:
+- id: earn.base_paise
+  low: 453307.8447877578
+  high: 1019942.6507724549
+  log: true
+- id: earn.premium.metro
+  low: 0.0
+  high: 0.2556191188766025
+- id: earn.sigma
+  low: 0.05
+  high: 0.42581832538361153
+- id: earn.stage_multiplier
+  low: 0.4434579368370715
+  high: 1.0434579368370716
+  key: self_employed
+- id: earn.stage_multiplier
+  low: 0.8587662771769649
+  high: 1.2
+  key: farm
+- id: earn.stage_multiplier
+  low: 0.296077033353332
+  high: 0.796077033353332
+  key: casual
+- id: consumption.spend_share
+  low: 0.7750420249164328
+  high: 1.0
+- id: consumption.purchases_per_month
+  low: 1.4577496798213307
+  high: 3.0
+  log: true
+  scale: true
+- id: rail.choice.upi_preference
+  low: 0.3
+  high: 0.5168056321580273
+- id: attr.digital.upi_threshold
+  low: 0.1
+  high: 0.28674949785535786
+- id: rail.choice.card_preference
+  low: 0.01190705779921239
+  high: 0.026790880048227876
+  log: true
+- id: spike.cash_withdrawal_paise
+  low: 472994.34918789705
+  high: 1064237.2856727685
+  log: true
+- id: open.deposit_months_of_income
+  low: 0.06825503947449146
+  high: 0.15357383881760578
+  log: true
+- id: consumption.ticket_sigma
+  low: 1.0321943055246252
+  high: 1.3
+- id: earn.return_by_education
+  low: 0.3
+  high: 1.5
+  scale: true
+- id: consumption.buffer_target_months
+  low: 0.5
+  high: 6.0
+  log: true
+versions:
+  optuna: 5.1.0
+  arthasim: 0.0.1
+  polars: 2.1.0
+trials: 200
