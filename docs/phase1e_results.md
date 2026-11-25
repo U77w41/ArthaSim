@@ -9,15 +9,17 @@ Spec: `docs/superpowers/specs/2026-11-24-calibration-validation-design.md`. Plan
 Commands:
 - `python scripts/calibrate.py --trials 400 --workers 3` (stage 1), then `python scripts/calibrate.py --around params/calibration/stage1.yaml --width 0.25 --trials 200 --sampler-seed 1 --workers 3` (stage 2, the committed fit);
 - `python scripts/phase1e_results.py`: tier S, seed 7, 1 April to 30 November 2025, once with the committed fit and once with registry defaults, each validated with the core suite;
+- `python scripts/phase1e_results.py --part seed --seed 8` (the committed fit at seed 8) and `python scripts/phase1e_results.py --part seed --seed 7 --fitted params/calibration/stage1.yaml` (stage 1's fit at seed 7), each validated, with the month-start decomposition;
+- `python -m pytest -m slow tests/test_gate_1e.py`;
 - `python scripts/bench.py --tier S --days 90 --seed 7` on `main` and on the branch.
 
-Every figure below was taken from those runs' output.
+Every figure below comes from those commands' output and from the committed calibration files and reports. The results script was run twice, before and after the final review's fixes; the figures are from the second run except where a section says otherwise.
 
 ## What changed
 
 - **The registry is pinned to sources.** It has 184 rows, up from 134: 50 targets, holdouts and appendix A rows. Every target and holdout cites its document and URL, and `docs/sources/calibration.md` gives each figure's table and page and every derivation. No value of the 134 earlier rows changed (a test pins their registry version against `main`'s).
 - **`calibrate(config, params, ...)`** fits free parameters by simulation with Optuna's TPE sampler and returns a `CalibrationResult` (`best`, `apply`, `save`, `load`, `report`). The committed fit is `params/calibration/fitted.yaml`, applied with `CalibrationResult.load(path).apply(config)`. Registry defaults are unchanged, so default runs are not calibrated.
-- **`run.validate(suite="core")`** runs 3 hard checks, 24 target checks and 2 holdouts (`params/validation/core.yaml`) and writes `validation_report.parquet` into the run.
+- **`run.validate(suite="core")`** runs 4 hard checks, 24 target checks and 2 holdouts (`params/validation/core.yaml`) and writes `validation_report.parquet` into the run. A report is removed when its world runs on, forks or loads, so it never describes another run.
 - **A slow gate,** `tests/test_gate_1e.py`, validates a calibrated tier S run from April to November 2025.
 - **The run manifest records the config** (without any release secret), so a stored run can be rebuilt and validated.
 
@@ -71,13 +73,13 @@ Fitted values (stage 2):
 | `spike.cash_withdrawal_paise` | 200,000 | 722,478 |
 | `open.deposit_months_of_income` | 0.8 | 0.0791 |
 
-Full bounds, scores and the loss path are in `params/calibration/fitted_report.md` and `stage1_report.md`. At 10,000 persons, 13 of the 16 fitted target components were inside their bands; the three outside were the consumption Gini (0.280 and 0.335) and UPI P2M payments under ₹500 (0.969).
+Full bounds, scores and the loss path are in `params/calibration/fitted_report.md` and `stage1_report.md`. Stage 2 searched bounds narrowed around stage 1's values, so lowering the space's floor for `open.deposit_months_of_income` to 0.02 did not reach stage 2, whose floor for it was 0.068. Two stage 2 values are within 5% of their narrowed bounds, on each parameter's own scale: `earn.base_paise` (985,804 against 1,019,943) and `attr.digital.upi_threshold` (0.280 against 0.287). With its best at its last trial, stage 2 had not converged. At 10,000 persons, 13 of the 16 fitted target components were inside their bands; the three outside were the consumption Gini (0.280 and 0.335) and UPI P2M payments under ₹500 (0.969).
 
 ## The gate: the core suite on a calibrated tier S run
 
 Seed 7 (not a calibration seed), 1 April to 30 November 2025, window May to November. 86,818,159 payment attempts.
 
-**Hard checks:** all pass. The ledger re-check holds in every month and at every month end, April to November; the rebuild of April matches all 8 fact tables and 7 dimension tables; none of the 781,845 identifiers checked (PAN-shaped, Aadhaar and mobile tokens, branch codes, account and customer numbers, cards, VPAs) is in a real format. The flow-matrix invariant is `skipped`: no table records each holder's sector, and the run checked it every day.
+**Hard checks:** none fails; 15 of the 16 hard rows pass. The ledger re-check holds in every month and at every month end, April to November; the rebuild of April matches all 8 fact tables and 7 dimension tables; none of the 781,845 identifiers checked (PAN-shaped, Aadhaar and mobile tokens, branch codes, account and customer numbers, cards, VPAs) is in a real format; the registry is the one the run was made with. The flow-matrix invariant is `skipped`: no table records each holder's sector, and the run checked it every day.
 
 **Target checks and holdouts,** calibrated against the same run with registry defaults:
 
@@ -119,13 +121,13 @@ Seed 7 (not a calibration seed), 1 April to 30 November 2025, window May to Nove
 | `accounts.zero_balance` | all | 0.0915 | 0.0615 to 0.1215 | 0.004 | fail | 0.003 | fail |
 | `accounts.inoperative` | all | 0.264 | 0.214 to 0.314 | 0.130 | fail | 0.088 | fail |
 | `holdout.festival_uplift` | all | 1.031 | 1.016 to 1.046 | 0.963 | fail | 0.965 | fail |
-| `holdout.dbt_cashout` | 0–5 days | 0.179 | 0.099 to 0.259 | 0.242 | pass | 0.296 | fail |
+| `holdout.dbt_cashout` | 0–5 days | 0.179 | 0.099 to 0.259 | 0.241 | pass | 0.295 | fail |
 | | 6–15 days | 0.234 | 0.154 to 0.314 | 0.152 | fail | 0.178 | pass |
-| | 16–30 days | 0.173 | 0.093 to 0.253 | 0.165 | pass | 0.152 | pass |
+| | 16–30 days | 0.173 | 0.093 to 0.253 | 0.165 | pass | 0.153 | pass |
 
 Targets with monthly values use May to November: the P2M target is the months' mean UPI volume times 0.63, divided by 1,016.1 million adults.
 
-In all, 27 of the 42 target and holdout components pass on the calibrated run and 12 checks fail; with registry defaults, 14 components pass and 21 checks fail. Calibration brought every fitted check except two into its band at tier S: pay (all six components), MPCE, UPI P2M, debit card and ATM counts, the ATM ticket and the basic-account balance. The two exceptions, the Gini and P2M tickets under ₹500, were already outside their bands at 10,000 persons.
+In all, 27 of the 42 target and holdout components pass on the calibrated run and 12 checks fail; with registry defaults, 14 components pass and 21 checks fail. The committed fit at seed 8 fails the same 12 checks. Calibration brought every fitted check except two into its band at tier S: pay (all six components), MPCE, UPI P2M, debit card and ATM counts, the ATM ticket and the basic-account balance. The two exceptions, the Gini and P2M tickets under ₹500, were already outside their bands at 10,000 persons.
 
 ## Known gaps
 
@@ -137,7 +139,7 @@ The gate passes because every failing check is listed in the suite with a ruling
 | `payments.upi_p2p_per_adult` | The model's P2P flows are allowances, remittances and some earnings; informal person-to-person payments are not modelled |
 | `payments.debit_card_ticket` | The rail choice does not depend on the amount, so cards carry ordinary small purchases |
 | `payments.p2p_under_500` | Simulated P2P payments are mostly large allowances and earnings |
-| `payments.month_start_spike` | Employer paydays are drawn uniformly over days 1–28 |
+| `payments.month_start_spike` | Employer paydays are drawn uniformly over days 1–28 for each employer, not at the turn of the month (see below) |
 | `accounts.zero_balance` | Every account opens with a deposit or a DBT credit, and withdrawals leave the part below a whole note |
 | `holdout.festival_uplift` | The model has no festival behaviour |
 
@@ -145,11 +147,19 @@ Four were not predicted:
 - **`consumption.gini`:** a calibration finding. Two searches could not bring consumption inequality into the band, even with pay dispersion and the returns to education fitted low.
 - **`payments.p2m_under_500`:** a calibration finding. The UPI P2M count needs many purchases a month, which makes tickets small; the rail choice does not depend on the amount.
 - **`accounts.inoperative`:** 13.0% of basic accounts had no transaction their holder made over May to November, against 26.4% inoperative for two years in PMJDY. The model has no account that is opened and then never used. This check was on the predicted list at first and was taken off before the gate's first run, because the uncalibrated run had 28% of basic accounts idle in a single month.
-- **`holdout.dbt_cashout`:** the 6–15 day share is 0.152 against a band from 0.154; the 0–5 and 16–30 day shares pass. With registry defaults it is the 0–5 day share that fails (0.296).
+- **`holdout.dbt_cashout`:** the 6–15 day share is 0.152 against a band from 0.154 (0.150 at seed 8); the 0–5 and 16–30 day shares pass. The fit moved it out of its band: with stage 1's fit it passes at seed 7 (0.160). With registry defaults it is the 0–5 day share that fails (0.295). Cash comes out only to cover cash payments, never because a credit landed.
 
 Two of the predicted failures did not fail the way the prediction said:
-- **The month-start spike** was 1.22 with stage 1's fit, inside the band, and 1.166 with stage 2's. The simulated rise comes from household allowances paid at the turn of the month (allowance value on the 1st to 3rd is 1.79 times that on the 10th to 25th, in the stage 1 run); spending by category is flat across the month.
-- **The festival ratio** is below 1 (0.963), not merely flat: simulated monthly spending does not depend on the month's length, so October's total is 0.998 of the mean of September's and November's and its value per day about 30/31 of theirs.
+- **The month-start spike depends on the seed.** Paydays are uniform for each employer, but employer sizes are skewed, so the statistic follows where a few large employers' paydays fall. Purchases do not follow pay, and allowances are paid the day after the payer's payday. Value on the 1st to 3rd over the 10th to 25th, May to November:
+
+  | Run | Spike | Salaries | Allowances (all rails) | UPI P2M | Largest employer's payday |
+  | :--- | ---: | ---: | ---: | ---: | :--- |
+  | Committed fit, seed 7 | 1.166 | 2.63 | 1.66 | 0.985 | the 2nd (3,407 salaried) |
+  | Committed fit, seed 8 | 0.884 | 0.40 | 0.64 | 0.987 | the 25th (2,301 salaried) |
+  | Stage 1's fit, seed 7 | 1.220 | 2.62 | 1.71 | 0.985 | the 2nd |
+
+  Stage 1's fit passed the check at seed 7 (1.220, inside 1.186 to 1.386). The prediction's reason, uniform paydays, stands; its wording, that salaries cause no month-start rise, was wrong at seed 7.
+- **The festival ratio** is below 1 (0.963), not merely flat: simulated monthly spending does not depend on the month's length, so a 31-day month's value per day is about 30/31 of a 30-day month's. With the statistic's weighting, October's total is 0.995 of the mean of September's and November's (0.963 × 31 / 30).
 
 ## The model drifts over the window
 
@@ -169,18 +179,18 @@ Pay is steady, but balances triple and spending rises a third over seven months:
 
 ## Default runs are unchanged
 
-`scripts/bench.py --tier S --days 90 --seed 7`: all 20 content hashes on the branch equal `main`'s, with 15,282,932 payment attempts in both. Of the other fields the bench prints, only `checkpoint_mb` differs (170.7 against 170.8): each checkpoint pickles the registry, which now has 50 more rows (about 19 KB).
+`scripts/bench.py --tier S --days 90 --seed 7`: all 20 content hashes on the branch equal `main`'s, with 15,282,932 payment attempts in both. Apart from timings, memory and the run path, the only field the bench prints that differs is `checkpoint_mb` (170.7 against 170.8): each checkpoint pickles the registry, which now has 50 more rows (about 19 KB).
 
 ## Costs
 
 | | Calibrated | Default |
 | :--- | ---: | ---: |
 | Payment attempts, April to November | 86,818,159 | 41,368,818 |
-| Simulation | 58.0 s | 31.0 s |
-| `run.validate("core")` | 69.8 s | 29.8 s |
+| Simulation, first and second run of the results script | 58.0 s, 117.1 s | 31.0 s, 57.0 s |
+| `run.validate("core")`, same two runs | 69.8 s, 129.9 s | 29.8 s, 54.0 s |
 
-The calibrated world makes 2.1 times as many payment attempts as the default one: purchases a month are scaled by 2.45 to reach the UPI P2M count. The gate test took 128 s. Calibration trials averaged 14.0 s (stage 1) and 14.7 s (stage 2) at 10,000 persons with three workers; part of that time other runs shared the machine.
+The two runs of the same command differ by about a factor of two; the machine was not otherwise measured, so treat the timings as rough. The calibrated world makes 2.1 times as many payment attempts as the default one: purchases a month are scaled by 2.45 to reach the UPI P2M count. The gate test took 128.1 s when green (its first, red run 128.7 s). Calibration trials averaged 14.0 s (stage 1) and 14.7 s (stage 2) at 10,000 persons with three workers; part of that time other runs shared the machine.
 
 ## Phase 1's exit criterion
 
-Architecture section 18 asks that "Phase 1 acceptance checks pass at tier S". On the committed calibration, every hard check passes and 12 of the 29 target and holdout checks fail, so the criterion is **not met**. The failures are listed above with their causes. Nine need behaviour the model does not have: an education gradient in unemployment (2 checks), informal P2P transfers (2), rail choice that depends on the amount (1), paydays at the turn of the month (1), accounts left empty or unused (2) and festival spending (1). One is the DBT cash-out holdout, missed by 0.2 points in one of its three windows. Two, the consumption Gini and P2M tickets under ₹500, are calibration findings: two searches could not fit them.
+Architecture section 18 asks that "Phase 1 acceptance checks pass at tier S". On the committed calibration no hard check fails (the flow-matrix re-check is skipped) and 12 of the 26 target and holdout checks fail, so the criterion is **not met**. The failures are listed above with their causes. Nine need behaviour the model does not have: an education gradient in unemployment (2 checks), informal P2P transfers (2), rail choice that depends on the amount (1), paydays at the turn of the month (1), accounts left empty or unused (2) and festival spending (1). One is the DBT cash-out holdout, missed by 0.2 points in one of its three windows, which the fit moved out of its band. Two, the consumption Gini and P2M tickets under ₹500, are calibration findings: two searches could not fit them.

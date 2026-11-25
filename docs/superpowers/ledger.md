@@ -924,7 +924,7 @@ The gate first ran with no `gap:` entries and failed, listing the failing checks
 
 Ruling: each of the 12 is listed with `gap:` and its ruling in `params/validation/core.yaml`. The two calibration findings were searched twice (600 trials) before listing, as the known-gaps rule requires. A holdout is never fitted, so a holdout failure is listed as a finding, not searched away. No tolerance changed. Cost if wrong: a check listed as a gap that a better model or search would pass; the gate fails as soon as one passes, so the list cannot go stale silently.
 
-A stage 1 preview (tier S, same seed, before stage 2 existed) passed `payments.month_start_spike` (1.22) and `holdout.dbt_cashout`; stage 2's fit moved both just outside their bands. The month-start rise in the simulation comes from household allowances paid at the turn of the month (allowance value on the 1st to 3rd is 1.79 times that on the 10th to 25th), not from pay.
+A stage 1 preview (tier S, same seed, before stage 2 existed) passed `payments.month_start_spike` (1.22) and `holdout.dbt_cashout`; stage 2's fit moved both just outside their bands. The explanation first written here, that the month-start rise came from allowances and not from pay, was wrong: the final review showed salaries rise at the turn of the month at seed 7 (below).
 
 ## Findings
 
@@ -938,3 +938,43 @@ A stage 1 preview (tier S, same seed, before stage 2 existed) passed `payments.m
 
 - Fast suite: 508 passed, 9 deselected (119.5 s). Slow gates: 9 (8 earlier and `test_gate_1e`), run below.
 - Not done: the fitted values are not registry defaults (a decision for the owner); the 12 gaps need model work (follow-ups listed in their rulings).
+
+## Final review (plan 1e)
+
+A fresh Opus reviewer read `29dd4a6..0388a80` in passes, ran the fast suite (508), the plan 1e gate (146.5 s) and the bench (all 20 hashes equal), recomputed statistics with its own queries on the stored calibrated run, and made two more tier S runs (stage 1's fit at seed 7; the committed fit at seed 8). Verdict: "with fixes". Four Critical findings (all false statements, under the owner's rule), three Important and eleven Minor.
+
+**Fixed.** Code fixes have tests; those that passed at red are marked.
+- **Critical: false statements in the results doc.**
+  - "12 of the 29" target and holdout checks: there are 26 (29 counted the hard checks); and "every hard check passes" is now "no hard check fails (the flow-matrix re-check is skipped)".
+  - "Only `checkpoint_mb` differs" in the bench: now "apart from timings, memory and the run path".
+  - "Every figure below was taken from those runs' output": the stage 1 figures came from an unlisted preview, and the 128 s was the red gate run. The command list now has `phase1e_results.py --part seed` for seed 8 and for stage 1's fit, the gate command, and says which figures come from which run; the gate's green time (128.1 s) and red time (128.7 s) are both given.
+  - **The month-start cause.** The gap ruling, the ledger and the results said salaries cause no month-start rise. At seed 7 the largest employer (3,407 salaried) pays on the 2nd and salary value on the 1st to 3rd is 2.63 times that on the 10th to 25th; at seed 8 the largest pays on the 25th and the spike is 0.884. All three texts now say the statistic follows where a few large employers' paydays fall, with the decomposition (`phase1e_results.py`'s `month_start`) at both seeds and for stage 1.
+- **Important: a stale validation report.** A fork carried its parent's report and a world that ran on kept its old one. `World.step`, `World.run` (when a day will run) and `_open` (fork and load) now remove the folder's `validation_report.parquet`. `test_a_report_never_outlives_the_run_it_describes` failed first.
+- **Important: the DBT holdout's ruling** named no mechanism or follow-up. It now says the fit moved the holdout out of its band (stage 1's fit passes at 0.160; the committed fit gives 0.152 at seed 7 and 0.150 at seed 8), that cash comes out only to cover cash payments, and names a follow-up. The spec gains a clause: a failing holdout is a finding with a ruling whether a missing mechanism or the fit moved it.
+- **Important: statistics with no independent recomputation.** New tests recompute unemployment (overall, educated, young graduates), the self-employed share, the Gini (by pairwise differences), the food share, both tickets, both under-₹500 shares, the month-start spike and the inoperative share, and check that a window with no data gives no component for every statistic. That last test was red for two reasons, both fixed: a window outside the run raised a DuckDB catalog error, and per-adult counts returned zero instead of nothing. One commit (`87c79ed`) went in with that test red; the next (`16c7661`) made it pass.
+- **Minor, fixed:**
+  - the ledger's "green in 128 s", "trial 400" (stage 1's best was trial 393) and "the committed calibration runs 400 trials" (the committed fit is stage 2's 200), and the spec's matching line;
+  - the "every statistic sums integers" ruling now says which three statistics add floats in Python, and that they replayed bit for bit;
+  - the festival explanation now uses the statistic's own weighting (October's total 0.995 of its neighbours', not the unweighted 0.998);
+  - the ledger re-check fails a month-end table that misses an open account, and reports a posting to an unknown account instead of raising (both tests failed first; the open-month damage test passed at red, guarding existing behaviour);
+  - an account or customer number that is all digits fails at any length, as the spec says (test failed first);
+  - a saved calibration leaves out `out_dir` (the committed `fitted.yaml` and `stage1.yaml` were rewritten without the machine path; best values, losses and trials unchanged, checked on load);
+  - `calibrate(log=...)` rewrites the trials table after every trial, and `scripts/calibrate.py` uses it;
+  - the report's bound flag is now "near a bound": within 5% of the range on the parameter's own scale (stage 2: `earn.base_paise` and `attr.digital.upi_threshold`; the results say so, with the narrowed deposit floor);
+  - a new hard check, `registry`, compares the run's registry version with the one its config now loads;
+  - DBT cash-out counts only withdrawals at or after the credit (`cashout_bins`, with a hand-made test that failed first; d0_5 on the gate run moves from 0.2418 to 0.2407);
+  - review-focus tests: three workers with two seeds (passed at red), a determinism skip for an intervention in the first month (passed at red), every free parameter an input `assumption` (passed at red);
+  - every gap ruling names a follow-up.
+
+**Rulings on the reviewer's "declined to judge" list.**
+- **No reconciliation of `payments` with `journal` and `postings`.** Not among section 7.3's invariants; the settlement writes all three in one step. Stands; follow-up candidate: a hard check that every successful payment has its journal entry.
+- **Determinism for runs from older code.** Runs without a recorded config are skipped; `_CODE_VERSION` is static, so a code change that alters output shows as a failure. Stands.
+- **Paths from `_ROOT`.** The project's existing pattern. Stands.
+- **`labour.stages` nearly a tautology.** It checks that alignment holds at tier S over the window, as the spec defines. Stands.
+- **Gaps listed per check, not per component.** A regression in a passing component of a gapped check (for example DBT 0–5 days) is hidden from the gate, though the report shows it. Stands as the spec's design; cost: such a regression is seen only in the report.
+- **A simulated May–November spike against a published May–September one, and HCES definitions.** Spec decisions. Stand.
+- **Memory of the ledger re-check beyond tier S.** Out of scope.
+- **Primary-document figures.** The reviewer checked arithmetic, derivations and the CSV, not the PDFs; the research read them (source notes).
+- **Seed sensitivity of the gate.** At seed 8 the committed fit fails the same 12 checks (measured after the fixes).
+
+**Deferred.** None of the reviewer's findings is left open.
