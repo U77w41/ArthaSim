@@ -96,6 +96,23 @@ def narrow(frees: Sequence[Free], values: Mapping[str, float], width: float) -> 
     return out
 
 
+def refine(frees: Sequence[Free], earlier: Mapping[str, float], params: ParamRegistry,
+           width: float) -> tuple[list[Free], dict[str, float]]:
+    """The search space and first proposal of a refining calibration: parameters fitted before are narrowed around
+    their fitted values and start there; parameters new to this search keep their bounds and start at the
+    registry's value (a scale at 1)."""
+    space, start = [], {}
+    for f in frees:
+        if f.name in earlier:
+            space.extend(narrow([f], earlier, width))
+            start[f.name] = float(earlier[f.name])
+        else:
+            space.append(f)
+            value = params.get(f.id)
+            start[f.name] = 1.0 if f.scale else float(value[f.key] if f.key is not None else value)
+    return space, start
+
+
 def _scaled(value: Any, factor: float) -> Any:
     if isinstance(value, bool):
         return value

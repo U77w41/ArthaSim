@@ -2,10 +2,13 @@
 # to. Every free parameter is a placeholder (status assumption) that moves a fitted check. See the spec,
 # docs/superpowers/specs/2026-11-24-calibration-validation-design.md, "The default free parameters and targets".
 # key: set one entry of a mapping row. scale: multiply every number of a list or mapping row.
+# The first 400-trial search (params/calibration/stage1.*) used 14 parameters with earn.sigma from 0.2 and
+# open.deposit_months_of_income from 0.1; it ended near both floors with the consumption Gini and the basic-account
+# balance above their bands, so the floors were lowered and the last two parameters added (see the ledger).
 free:
 - {id: earn.base_paise, low: 300000, high: 1500000, log: true}
 - {id: earn.premium.metro, low: 0.0, high: 0.8}
-- {id: earn.sigma, low: 0.2, high: 0.9}
+- {id: earn.sigma, low: 0.05, high: 0.9}
 - {id: earn.stage_multiplier, key: self_employed, low: 0.3, high: 1.5}
 - {id: earn.stage_multiplier, key: farm, low: 0.2, high: 1.2}
 - {id: earn.stage_multiplier, key: casual, low: 0.2, high: 1.2}
@@ -15,8 +18,10 @@ free:
 - {id: attr.digital.upi_threshold, low: 0.1, high: 0.8}
 - {id: rail.choice.card_preference, low: 0.005, high: 0.6, log: true}
 - {id: spike.cash_withdrawal_paise, low: 100000, high: 1500000, log: true}
-- {id: open.deposit_months_of_income, low: 0.1, high: 3.0, log: true}
+- {id: open.deposit_months_of_income, low: 0.02, high: 3.0, log: true}
 - {id: consumption.ticket_sigma, low: 0.3, high: 1.3}
+- {id: earn.return_by_education, scale: true, low: 0.3, high: 1.5}
+- {id: consumption.buffer_target_months, low: 0.5, high: 6.0, log: true}
 targets:
 - pay.regular_monthly
 - pay.casual_daily

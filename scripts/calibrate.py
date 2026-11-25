@@ -11,8 +11,10 @@ import sys
 import time
 from pathlib import Path
 
-from arthasim import CalibrationResult, Config, Free, calibrate
-from arthasim.calibration import narrow
+from arthasim import CalibrationResult, Config, ParamRegistry, calibrate
+from arthasim.calibration import load_space, refine
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -25,7 +27,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--sampler-seed", type=int, default=0)
     ap.add_argument("--work", default="runs/calibration", help="folder for the trial runs (each removed when scored)")
     ap.add_argument("--out", default="params/calibration/fitted.yaml")
-    ap.add_argument("--around", help="refine: search narrowed bounds around this earlier fit, starting from it")
+    ap.add_argument("--around", help="refine: the default space, narrowed around this earlier fit for the parameters "
+                                     "it fitted, starting from it")
     ap.add_argument("--width", type=float, default=0.25, help="with --around: the narrowing (see calibration.narrow)")
     args = ap.parse_args(argv)
 
@@ -33,8 +36,9 @@ def main(argv: list[str] | None = None) -> None:
     params, start = None, None
     if args.around:
         earlier = CalibrationResult.load(args.around)
-        params = narrow([Free(**f) for f in earlier.space], earlier.free, args.width)
-        start = earlier.free
+        frees, _ = load_space()
+        registry = ParamRegistry.load(ROOT / config.params_path)
+        params, start = refine(frees, earlier.free, registry, args.width)
     started = time.perf_counter()
 
     def progress(trial: int, loss: float, best: float) -> None:

@@ -29,7 +29,7 @@ def test_scores_and_loss():
 
 def test_default_space_names_registry_rows_and_suite_checks():
     frees, targets = calibration.load_space()
-    assert len(frees) == 14 and len(targets) == 11
+    assert len(frees) == 16 and len(targets) == 11
     for f in frees:
         assert f.id in P and f.low < f.high
     with pytest.raises(ValueError, match="nope"):
@@ -76,3 +76,13 @@ def test_narrowed_space_and_start_values(tmp_path):
     result = calibration.calibrate(config, params=[narrow[0]], targets=["pay.regular_monthly"], trials=1,
                                    seeds=(1,), months=2, start={"earn.base_paise": 600_000.0})
     assert result.trials["free:earn.base_paise"].to_list() == [600_000.0]
+
+
+def test_refine_narrows_known_parameters_and_starts_new_ones_at_their_defaults():
+    frees = [Free("earn.sigma", 0.05, 0.9), Free("earn.return_by_education", 0.3, 1.5, scale=True),
+             Free("consumption.buffer_target_months", 0.5, 6.0, log=True)]
+    space, start = calibration.refine(frees, {"earn.sigma": 0.2133}, P, width=0.25)
+    assert space[0].low == 0.05 and space[0].high == pytest.approx(0.2133 + 0.2125)
+    assert (space[1].low, space[1].high) == (0.3, 1.5) and (space[2].low, space[2].high) == (0.5, 6.0)
+    assert start == {"earn.sigma": 0.2133, "earn.return_by_education:scale": 1.0,
+                     "consumption.buffer_target_months": 3.0}

@@ -185,13 +185,13 @@ A calibrated run's manifest records its config, overrides included (a new `confi
 
 ### The default free parameters and targets (`params/calibration/space.yaml`)
 
-Fourteen parameters, each a placeholder (`assumption`) that moves a fitted target:
+Sixteen parameters, each a placeholder (`assumption`) that moves a fitted target. The first search used the first fourteen, with `earn.sigma` from 0.2 and `open.deposit_months_of_income` from 0.1; see "Two stages" below.
 
 | Parameter | Bounds | Scale | Moves |
 | :--- | :--- | :--- | :--- |
 | `earn.base_paise` | ₹3,000 to ₹15,000 | log | every earnings level, MPCE |
 | `earn.premium.metro` | 0 to 0.8 | linear | the urban–rural gap |
-| `earn.sigma` | 0.2 to 0.9 | linear | dispersion, the Gini |
+| `earn.sigma` | 0.05 to 0.9 | linear | dispersion, the Gini |
 | `earn.stage_multiplier`, key `self_employed` | 0.3 to 1.5 | linear | self-employment earnings |
 | `earn.stage_multiplier`, key `farm` | 0.2 to 1.2 | linear | self-employment earnings (rural) |
 | `earn.stage_multiplier`, key `casual` | 0.2 to 1.2 | linear | casual wages |
@@ -201,10 +201,14 @@ Fourteen parameters, each a placeholder (`assumption`) that moves a fitted targe
 | `attr.digital.upi_threshold` | 0.1 to 0.8 | linear | who uses UPI |
 | `rail.choice.card_preference` | 0.005 to 0.6 | log | debit card use |
 | `spike.cash_withdrawal_paise` | ₹1,000 to ₹15,000 | log | ATM withdrawal size and count |
-| `open.deposit_months_of_income` | 0.1 to 3 | log | balances |
+| `open.deposit_months_of_income` | 0.02 to 3 | log | balances |
 | `consumption.ticket_sigma` | 0.3 to 1.3 | linear | ticket sizes |
+| `earn.return_by_education`, every entry scaled | ×0.3 to ×1.5 | linear | pay dispersion, the Gini |
+| `consumption.buffer_target_months` | 0.5 to 6 | log | saving, balances |
 
 Fitted checks: `pay.regular_monthly`, `pay.casual_daily`, `pay.self_employed_monthly`, `consumption.mpce`, `consumption.gini`, `payments.upi_p2m_per_adult`, `payments.debit_card_per_adult`, `payments.atm_per_adult`, `payments.atm_ticket`, `payments.p2m_under_500`, `balances.basic_mean`. Every other target check is validation only; holdouts are never fitted.
+
+**Two stages (decided during the build).** The first search (400 trials, 14 parameters) ended with `earn.sigma` and `open.deposit_months_of_income` within 7% and 3% of their lower bounds, and with the consumption Gini (+2.4 and +3.0 tolerances) and the basic-account balance (+1.3) still above their bands. As the known-gaps rule allows, the search was widened rather than the checks excused: both floors were lowered, the returns to education (as a scale) and the buffer target were added, and a second search of 200 trials ran inside bounds narrowed around the first fit (`calibration.refine`, width 0.25), starting from it, so it cannot end worse. The first search's files are kept as `params/calibration/stage1.*`.
 
 **Decided.** The committed calibration runs 400 trials, not the signature's default of 200: TPE needs more trials as dimensions grow. At about 10 s a trial with three workers (8-month runs), 400 trials take a little over an hour. The first 20 trials are random (`n_startup_trials=20`), and the sampler is multivariate. Cost if wrong: a fit that a longer search would improve; the trials table shows whether the loss was still falling.
 
